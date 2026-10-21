@@ -1,0 +1,209 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    turbofw market data protocol (normalized, exchange independent).
+
+    Published by market data connectors, consumed by strategies.
+
+    Conventions:
+      * exchangeTime - exchange timestamp of the event, receiveTime - when the connector received it
+        (both nanoseconds since the Unix epoch);
+      * seqNum - per-channel sequence number assigned by the connector, increments by one for every
+        message published to a channel (gap detection);
+      * flags.EndOfEvent marks the last message of an exchange event: a book is consistent only after
+        a message with EndOfEvent; several messages produced from one exchange packet share exchangeTime;
+      * flags.Snapshot marks messages produced while (re)building state from a snapshot, flags.Recovery
+        marks messages produced during gap recovery.
+
+    Fields are ordered by size (8, 4, 2, 1 bytes) to keep them naturally aligned.
+-->
+<sbe:messageSchema xmlns:sbe="http://fixprotocol.io/2016/sbe"
+                   xmlns:xi="http://www.w3.org/2001/XInclude"
+                   description="turbofw market data"
+                   byteOrder="littleEndian"
+                   package="turbofw.md"
+                   id="1"
+                   version="0"
+                   semanticVersion="0.1">
+    <xi:include href="common.xml"/>
+
+    <types>
+        <type name="Symbol" primitiveType="char" length="32" characterEncoding="US-ASCII"/>
+
+        <set name="MdFlags" encodingType="uint8">
+            <choice name="EndOfEvent">0</choice>
+            <choice name="Snapshot">1</choice>
+            <choice name="Recovery">2</choice>
+        </set>
+
+        <enum name="InstrumentType" encodingType="uint8">
+            <validValue name="Other">0</validValue>
+            <validValue name="Spot">1</validValue>
+            <validValue name="Equity">2</validValue>
+            <validValue name="Future">3</validValue>
+            <validValue name="Option">4</validValue>
+            <validValue name="Perpetual">5</validValue>
+        </enum>
+
+        <enum name="TradingStatus" encodingType="uint8">
+            <validValue name="Unknown">0</validValue>
+            <validValue name="PreOpen">1</validValue>
+            <validValue name="OpeningAuction">2</validValue>
+            <validValue name="Open">3</validValue>
+            <validValue name="ClosingAuction">4</validValue>
+            <validValue name="Halted">5</validValue>
+            <validValue name="Closed">6</validValue>
+        </enum>
+
+        <enum name="MboAction" encodingType="uint8">
+            <validValue name="Add" description="New order in the book">0</validValue>
+            <validValue name="Modify" description="Price and/or qty of a resting order changed">1</validValue>
+            <validValue name="Delete" description="Order removed from the book">2</validValue>
+            <validValue name="Fill" description="Resting order (partially) filled, qty is the remaining qty">3</validValue>
+            <validValue name="Clear" description="Whole book of the instrument is cleared">4</validValue>
+        </enum>
+
+        <enum name="MbpAction" encodingType="uint8">
+            <validValue name="New">0</validValue>
+            <validValue name="Change">1</validValue>
+            <validValue name="Delete">2</validValue>
+        </enum>
+
+        <enum name="AggressorSide" encodingType="char">
+            <validValue name="Buy">B</validValue>
+            <validValue name="Sell">S</validValue>
+            <validValue name="None">N</validValue>
+        </enum>
+
+        <enum name="StatType" encodingType="uint8">
+            <validValue name="OpenPrice">1</validValue>
+            <validValue name="HighPrice">2</validValue>
+            <validValue name="LowPrice">3</validValue>
+            <validValue name="ClosePrice">4</validValue>
+            <validValue name="SettlementPrice">5</validValue>
+            <validValue name="IndicativeOpenPrice">6</validValue>
+            <validValue name="LimitUpPrice">7</validValue>
+            <validValue name="LimitDownPrice">8</validValue>
+            <validValue name="Volume">20</validValue>
+            <validValue name="Turnover">21</validValue>
+            <validValue name="OpenInterest">22</validValue>
+            <validValue name="TradeCount">23</validValue>
+        </enum>
+    </types>
+
+    <!-- reference data: 1..9 -->
+
+    <sbe:message name="InstrumentDefinition" id="1" description="Instrument reference data">
+        <field id="1" name="receiveTime" type="Timestamp"/>
+        <field id="2" name="seqNum" type="uint64"/>
+        <field id="3" name="tickSize" type="Price"/>
+        <field id="4" name="lotSize" type="Qty"/>
+        <field id="5" name="minQty" type="Qty"/>
+        <field id="6" name="contractMultiplier" type="Qty"/>
+        <field id="7" name="instrumentId" type="InstrumentId"/>
+        <field id="8" name="venueId" type="uint16"/>
+        <field id="9" name="instrumentType" type="InstrumentType"/>
+        <field id="10" name="priceExponent" type="int8"/>
+        <field id="11" name="qtyExponent" type="int8"/>
+        <field id="12" name="flags" type="MdFlags"/>
+        <field id="13" name="symbol" type="Symbol"/>
+    </sbe:message>
+
+    <sbe:message name="TradingStatusUpdate" id="2" description="Instrument trading phase change">
+        <field id="1" name="exchangeTime" type="Timestamp"/>
+        <field id="2" name="receiveTime" type="Timestamp"/>
+        <field id="3" name="seqNum" type="uint64"/>
+        <field id="4" name="instrumentId" type="InstrumentId"/>
+        <field id="5" name="status" type="TradingStatus"/>
+        <field id="6" name="flags" type="MdFlags"/>
+    </sbe:message>
+
+    <!-- order book: 10..29 -->
+
+    <sbe:message name="MboUpdate" id="10" description="Market by order: change of a single order">
+        <field id="1" name="exchangeTime" type="Timestamp"/>
+        <field id="2" name="receiveTime" type="Timestamp"/>
+        <field id="3" name="seqNum" type="uint64"/>
+        <field id="4" name="orderId" type="uint64"/>
+        <field id="5" name="price" type="Price"/>
+        <field id="6" name="qty" type="Qty" description="Remaining (visible) qty after the action"/>
+        <field id="7" name="instrumentId" type="InstrumentId"/>
+        <field id="8" name="action" type="MboAction"/>
+        <field id="9" name="side" type="Side"/>
+        <field id="10" name="flags" type="MdFlags"/>
+    </sbe:message>
+
+    <sbe:message name="MbpUpdate" id="20" description="Market by price: incremental level changes">
+        <field id="1" name="exchangeTime" type="Timestamp"/>
+        <field id="2" name="receiveTime" type="Timestamp"/>
+        <field id="3" name="seqNum" type="uint64"/>
+        <field id="4" name="instrumentId" type="InstrumentId"/>
+        <field id="5" name="flags" type="MdFlags"/>
+        <group id="100" name="levels" dimensionType="groupSizeEncoding">
+            <field id="1" name="price" type="Price"/>
+            <field id="2" name="qty" type="Qty"/>
+            <field id="3" name="orderCount" type="uint32"/>
+            <field id="4" name="level" type="uint8" description="Zero-based level index"/>
+            <field id="5" name="action" type="MbpAction"/>
+            <field id="6" name="side" type="Side"/>
+        </group>
+    </sbe:message>
+
+    <sbe:message name="MbpSnapshot" id="21" description="Market by price: full book state">
+        <field id="1" name="exchangeTime" type="Timestamp"/>
+        <field id="2" name="receiveTime" type="Timestamp"/>
+        <field id="3" name="seqNum" type="uint64"/>
+        <field id="4" name="instrumentId" type="InstrumentId"/>
+        <field id="5" name="flags" type="MdFlags"/>
+        <group id="100" name="bids" dimensionType="groupSizeEncoding" description="Best first">
+            <field id="1" name="price" type="Price"/>
+            <field id="2" name="qty" type="Qty"/>
+            <field id="3" name="orderCount" type="uint32"/>
+        </group>
+        <group id="101" name="asks" dimensionType="groupSizeEncoding" description="Best first">
+            <field id="1" name="price" type="Price"/>
+            <field id="2" name="qty" type="Qty"/>
+            <field id="3" name="orderCount" type="uint32"/>
+        </group>
+    </sbe:message>
+
+    <sbe:message name="BestBidOffer" id="22" description="Top of the book; qty == 0 means the side is empty">
+        <field id="1" name="exchangeTime" type="Timestamp"/>
+        <field id="2" name="receiveTime" type="Timestamp"/>
+        <field id="3" name="seqNum" type="uint64"/>
+        <field id="4" name="bidPrice" type="Price"/>
+        <field id="5" name="bidQty" type="Qty"/>
+        <field id="6" name="askPrice" type="Price"/>
+        <field id="7" name="askQty" type="Qty"/>
+        <field id="8" name="instrumentId" type="InstrumentId"/>
+        <field id="9" name="bidCount" type="uint32"/>
+        <field id="10" name="askCount" type="uint32"/>
+        <field id="11" name="flags" type="MdFlags"/>
+    </sbe:message>
+
+    <!-- trades: 30..39 -->
+
+    <sbe:message name="Trade" id="30" description="Public trade">
+        <field id="1" name="exchangeTime" type="Timestamp"/>
+        <field id="2" name="receiveTime" type="Timestamp"/>
+        <field id="3" name="seqNum" type="uint64"/>
+        <field id="4" name="tradeId" type="uint64"/>
+        <field id="5" name="price" type="Price"/>
+        <field id="6" name="qty" type="Qty"/>
+        <field id="7" name="instrumentId" type="InstrumentId"/>
+        <field id="8" name="aggressorSide" type="AggressorSide"/>
+        <field id="9" name="flags" type="MdFlags"/>
+    </sbe:message>
+
+    <!-- statistics: 40..49 -->
+
+    <sbe:message name="Statistic" id="40" description="Session statistic">
+        <field id="1" name="exchangeTime" type="Timestamp"/>
+        <field id="2" name="receiveTime" type="Timestamp"/>
+        <field id="3" name="seqNum" type="uint64"/>
+        <field id="4" name="value" type="int64"
+               description="Price mantissa for *Price stats, qty mantissa for Volume / OpenInterest, count for TradeCount"/>
+        <field id="5" name="instrumentId" type="InstrumentId"/>
+        <field id="6" name="statType" type="StatType"/>
+        <field id="7" name="flags" type="MdFlags"/>
+    </sbe:message>
+</sbe:messageSchema>

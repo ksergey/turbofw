@@ -1,0 +1,212 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    turbofw trading protocol (normalized, exchange independent).
+
+    Requests (strategy -> trade connector): NewOrder, ReplaceOrder, CancelOrder, MassCancel.
+    Responses (trade connector -> strategy): ExecutionReport, OrderCancelReject, MassCancelReport, SessionStatus.
+
+    Conventions:
+      * clOrdId - id assigned by the strategy, unique per accountId for the lifetime of the account;
+        every request (incl. replace and cancel) carries a new clOrdId, origClOrdId refers to the
+        clOrdId of the order being replaced / canceled (FIX semantics);
+      * orderId - exchange order id mapped to uint64 by the trade connector, 0 until known;
+      * sendTime - when the strategy sent the request, transactTime - exchange time of the event,
+        receiveTime - when the connector received it (nanoseconds since the Unix epoch);
+      * rejectReason == None in a response means "not rejected".
+
+    Fields are ordered by size (8, 4, 2, 1 bytes) to keep them naturally aligned.
+-->
+<sbe:messageSchema xmlns:sbe="http://fixprotocol.io/2016/sbe"
+                   xmlns:xi="http://www.w3.org/2001/XInclude"
+                   description="turbofw trading"
+                   byteOrder="littleEndian"
+                   package="turbofw.trading"
+                   id="2"
+                   version="0"
+                   semanticVersion="0.1">
+    <xi:include href="common.xml"/>
+
+    <types>
+        <type name="ClOrdId" primitiveType="uint64" description="Client order id (strategy assigned)"/>
+        <type name="OrderId" primitiveType="uint64" description="Exchange order id, 0 when unknown"/>
+        <type name="AccountId" primitiveType="uint32"/>
+
+        <enum name="OrdType" encodingType="uint8">
+            <validValue name="Limit">0</validValue>
+            <validValue name="Market">1</validValue>
+        </enum>
+
+        <enum name="TimeInForce" encodingType="uint8">
+            <validValue name="Day">0</validValue>
+            <validValue name="GTC">1</validValue>
+            <validValue name="IOC">2</validValue>
+            <validValue name="FOK">3</validValue>
+        </enum>
+
+        <set name="OrderFlags" encodingType="uint8">
+            <choice name="PostOnly">0</choice>
+            <choice name="ReduceOnly">1</choice>
+        </set>
+
+        <enum name="ExecType" encodingType="uint8">
+            <validValue name="New">0</validValue>
+            <validValue name="Trade">1</validValue>
+            <validValue name="Canceled">2</validValue>
+            <validValue name="Replaced">3</validValue>
+            <validValue name="Rejected">4</validValue>
+            <validValue name="Expired">5</validValue>
+            <validValue name="PendingNew">6</validValue>
+            <validValue name="PendingCancel">7</validValue>
+            <validValue name="PendingReplace">8</validValue>
+            <validValue name="Restated">9</validValue>
+        </enum>
+
+        <enum name="OrdStatus" encodingType="uint8">
+            <validValue name="PendingNew">0</validValue>
+            <validValue name="New">1</validValue>
+            <validValue name="PartiallyFilled">2</validValue>
+            <validValue name="Filled">3</validValue>
+            <validValue name="Canceled">4</validValue>
+            <validValue name="Rejected">5</validValue>
+            <validValue name="Expired">6</validValue>
+            <validValue name="PendingCancel">7</validValue>
+            <validValue name="PendingReplace">8</validValue>
+        </enum>
+
+        <enum name="RejectReason" encodingType="uint16">
+            <validValue name="None">0</validValue>
+            <validValue name="Other">1</validValue>
+            <validValue name="ExchangeReject">2</validValue>
+            <validValue name="NotConnected">3</validValue>
+            <validValue name="Throttled">4</validValue>
+            <validValue name="RiskLimit">5</validValue>
+            <validValue name="UnknownInstrument">6</validValue>
+            <validValue name="UnknownAccount">7</validValue>
+            <validValue name="InvalidPrice">8</validValue>
+            <validValue name="InvalidQty">9</validValue>
+            <validValue name="DuplicateClOrdId">10</validValue>
+            <validValue name="UnknownOrder">11</validValue>
+            <validValue name="TooLateToCancel">12</validValue>
+            <validValue name="MarketClosed">13</validValue>
+        </enum>
+
+        <enum name="Liquidity" encodingType="uint8">
+            <validValue name="Unknown">0</validValue>
+            <validValue name="Maker">1</validValue>
+            <validValue name="Taker">2</validValue>
+        </enum>
+
+        <enum name="CxlRejResponseTo" encodingType="uint8">
+            <validValue name="Cancel">0</validValue>
+            <validValue name="Replace">1</validValue>
+        </enum>
+
+        <enum name="SessionState" encodingType="uint8">
+            <validValue name="Disconnected">0</validValue>
+            <validValue name="Connecting">1</validValue>
+            <validValue name="Ready">2</validValue>
+            <validValue name="Throttled">3</validValue>
+        </enum>
+    </types>
+
+    <!-- requests: 1..9 -->
+
+    <sbe:message name="NewOrder" id="1" description="New order request">
+        <field id="1" name="clOrdId" type="ClOrdId"/>
+        <field id="2" name="price" type="Price" description="Ignored for Market orders"/>
+        <field id="3" name="qty" type="Qty"/>
+        <field id="4" name="sendTime" type="Timestamp"/>
+        <field id="5" name="accountId" type="AccountId"/>
+        <field id="6" name="instrumentId" type="InstrumentId"/>
+        <field id="7" name="side" type="Side"/>
+        <field id="8" name="ordType" type="OrdType"/>
+        <field id="9" name="timeInForce" type="TimeInForce"/>
+        <field id="10" name="flags" type="OrderFlags"/>
+    </sbe:message>
+
+    <sbe:message name="ReplaceOrder" id="2" description="Change price and/or qty of a working order">
+        <field id="1" name="clOrdId" type="ClOrdId"/>
+        <field id="2" name="origClOrdId" type="ClOrdId"/>
+        <field id="3" name="price" type="Price"/>
+        <field id="4" name="qty" type="Qty" description="New total order qty"/>
+        <field id="5" name="sendTime" type="Timestamp"/>
+        <field id="6" name="accountId" type="AccountId"/>
+        <field id="7" name="instrumentId" type="InstrumentId"/>
+        <field id="8" name="side" type="Side"/>
+    </sbe:message>
+
+    <sbe:message name="CancelOrder" id="3" description="Cancel a working order">
+        <field id="1" name="clOrdId" type="ClOrdId"/>
+        <field id="2" name="origClOrdId" type="ClOrdId"/>
+        <field id="3" name="sendTime" type="Timestamp"/>
+        <field id="4" name="accountId" type="AccountId"/>
+        <field id="5" name="instrumentId" type="InstrumentId"/>
+        <field id="6" name="side" type="Side"/>
+    </sbe:message>
+
+    <sbe:message name="MassCancel" id="4" description="Cancel all working orders matching the filter">
+        <field id="1" name="clOrdId" type="ClOrdId"/>
+        <field id="2" name="sendTime" type="Timestamp"/>
+        <field id="3" name="accountId" type="AccountId"/>
+        <field id="4" name="instrumentId" type="InstrumentId" presence="optional" description="Null - all instruments"/>
+        <field id="5" name="side" type="Side" presence="optional" description="Null - both sides"/>
+    </sbe:message>
+
+    <!-- responses: 10..19 -->
+
+    <sbe:message name="ExecutionReport" id="10" description="Order state change">
+        <field id="1" name="clOrdId" type="ClOrdId"/>
+        <field id="2" name="origClOrdId" type="ClOrdId" description="Set for Replaced / Canceled, 0 otherwise"/>
+        <field id="3" name="orderId" type="OrderId"/>
+        <field id="4" name="execId" type="uint64" description="Unique per fill for ExecType.Trade"/>
+        <field id="5" name="price" type="Price" description="Order price"/>
+        <field id="6" name="qty" type="Qty" description="Order qty"/>
+        <field id="7" name="leavesQty" type="Qty"/>
+        <field id="8" name="cumQty" type="Qty"/>
+        <field id="9" name="lastPrice" type="Price" description="Fill price for ExecType.Trade"/>
+        <field id="10" name="lastQty" type="Qty" description="Fill qty for ExecType.Trade"/>
+        <field id="11" name="transactTime" type="Timestamp"/>
+        <field id="12" name="receiveTime" type="Timestamp"/>
+        <field id="13" name="accountId" type="AccountId"/>
+        <field id="14" name="instrumentId" type="InstrumentId"/>
+        <field id="15" name="rejectReason" type="RejectReason"/>
+        <field id="16" name="execType" type="ExecType"/>
+        <field id="17" name="ordStatus" type="OrdStatus"/>
+        <field id="18" name="side" type="Side"/>
+        <field id="19" name="ordType" type="OrdType"/>
+        <field id="20" name="timeInForce" type="TimeInForce"/>
+        <field id="21" name="liquidity" type="Liquidity"/>
+    </sbe:message>
+
+    <sbe:message name="OrderCancelReject" id="11" description="Cancel or replace request rejected">
+        <field id="1" name="clOrdId" type="ClOrdId"/>
+        <field id="2" name="origClOrdId" type="ClOrdId"/>
+        <field id="3" name="orderId" type="OrderId"/>
+        <field id="4" name="transactTime" type="Timestamp"/>
+        <field id="5" name="receiveTime" type="Timestamp"/>
+        <field id="6" name="accountId" type="AccountId"/>
+        <field id="7" name="instrumentId" type="InstrumentId"/>
+        <field id="8" name="rejectReason" type="RejectReason"/>
+        <field id="9" name="ordStatus" type="OrdStatus" description="Current status of the original order"/>
+        <field id="10" name="responseTo" type="CxlRejResponseTo"/>
+    </sbe:message>
+
+    <sbe:message name="MassCancelReport" id="12" description="Result of MassCancel; individual orders also get ExecutionReports">
+        <field id="1" name="clOrdId" type="ClOrdId"/>
+        <field id="2" name="transactTime" type="Timestamp"/>
+        <field id="3" name="receiveTime" type="Timestamp"/>
+        <field id="4" name="accountId" type="AccountId"/>
+        <field id="5" name="instrumentId" type="InstrumentId" presence="optional"/>
+        <field id="6" name="canceledCount" type="uint32"/>
+        <field id="7" name="rejectReason" type="RejectReason"/>
+        <field id="8" name="side" type="Side" presence="optional"/>
+    </sbe:message>
+
+    <!-- session: 20..29 -->
+
+    <sbe:message name="SessionStatus" id="20" description="Trade connector session state change">
+        <field id="1" name="time" type="Timestamp"/>
+        <field id="2" name="sessionId" type="uint16" description="Trade connector session id"/>
+        <field id="3" name="state" type="SessionState"/>
+    </sbe:message>
+</sbe:messageSchema>
