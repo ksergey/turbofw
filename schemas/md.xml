@@ -12,18 +12,23 @@
       * flags.EndOfEvent marks the last message of an exchange event: a book is consistent only after
         a message with EndOfEvent; several messages produced from one exchange packet share exchangeTime;
       * flags.Snapshot marks messages produced while (re)building state from a snapshot, flags.Recovery
-        marks messages produced during gap recovery.
+        marks messages produced during gap recovery;
+      * fields of the NULL types (QtyNULL, ...) encode "absent" as the all-ones sentinel; the codec
+        exposes present()/reset() for them.
 
     Fields are ordered by size (8, 4, 2, 1 bytes) to keep them naturally aligned.
+
+    version 1 (semanticVersion 0.2): contractMultiplier became optional (QtyNULL) - wire layout is
+    unchanged, only the encoding of "not applicable" is now the explicit sentinels.
 -->
 <sbe:messageSchema xmlns:sbe="http://fixprotocol.io/2016/sbe"
                    xmlns:xi="http://www.w3.org/2001/XInclude"
                    description="turbofw market data"
                    byteOrder="littleEndian"
                    package="turbofw.md"
-                   id="1"
-                   version="0"
-                   semanticVersion="0.1">
+                    id="1"
+                    version="1"
+                    semanticVersion="0.2">
     <xi:include href="common.xml"/>
 
     <types>
@@ -98,7 +103,8 @@
         <field id="3" name="tickSize" type="Price"/>
         <field id="4" name="lotSize" type="Qty"/>
         <field id="5" name="minQty" type="Qty"/>
-        <field id="6" name="contractMultiplier" type="Qty"/>
+        <field id="6" name="contractMultiplier" type="QtyNULL"
+               description="Null - not applicable (e.g. spot instruments)"/>
         <field id="7" name="instrumentId" type="InstrumentId"/>
         <field id="8" name="venueId" type="uint16"/>
         <field id="9" name="instrumentType" type="InstrumentType"/>

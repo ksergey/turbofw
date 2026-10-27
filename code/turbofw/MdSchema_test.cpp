@@ -73,6 +73,28 @@ TEST_SUITE("MdSchema") {
         REQUIRE_EQ(decodedAsks.count(), 1);
         REQUIRE_EQ(decodedAsks.next().get<"price">().value(), 101);
     }
+
+    TEST_CASE("InstrumentDefinition contractMultiplier null semantics") {
+        std::array<std::byte, 256> buffer{};
+
+        auto msg = md::InstrumentDefinition::wrapAndApplyHeader(buffer);
+        msg.get<"tickSize">().value(1);
+        msg.get<"lotSize">().value(1);
+        msg.get<"minQty">().value(1);
+        msg.get<"contractMultiplier">().value(100); // e.g. futures
+
+        auto header = md::MessageHeader{buffer.data()};
+        auto decoded = md::InstrumentDefinition{buffer, header.sbeEncodedLength(),
+            header.get<"blockLength">().value(), header.get<"version">().value()};
+        REQUIRE(decoded.get<"contractMultiplier">().present());
+        REQUIRE_EQ(decoded.get<"contractMultiplier">().value(), 100);
+
+        // spot/equities have no contract multiplier: the field is reset to the QtyNULL sentinel
+        msg.get<"contractMultiplier">().reset();
+        auto decoded2 = md::InstrumentDefinition{buffer, header.sbeEncodedLength(),
+            header.get<"blockLength">().value(), header.get<"version">().value()};
+        REQUIRE_FALSE(decoded2.get<"contractMultiplier">().present());
+    }
 }
 
 } // namespace turbofw::testing

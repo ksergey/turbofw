@@ -83,8 +83,66 @@ TEST_SUITE("TradingSchema") {
             header.get<"blockLength">().value(), header.get<"version">().value()};
         REQUIRE_EQ(decoded.get<"leavesQty">().value(), 3);
         REQUIRE_EQ(decoded.get<"lastQty">().value(), 2);
+        REQUIRE(decoded.get<"lastQty">().present());
+        REQUIRE(decoded.get<"lastPrice">().present());
         REQUIRE(decoded.get<"execType">().value() == trading::ExecType::Trade);
         REQUIRE(decoded.get<"ordStatus">().value() == trading::OrdStatus::PartiallyFilled);
+    }
+
+    TEST_CASE("ExecutionReport without a fill leaves lastPrice/lastQty null") {
+        std::array<std::byte, 256> buffer{};
+
+        auto msg = trading::ExecutionReport::wrapAndApplyHeader(buffer);
+        msg.get<"clOrdId">().value(1);
+        msg.get<"orderId">().value(987);
+        msg.get<"qty">().value(5);
+        msg.get<"cumQty">().value(0);
+        msg.get<"leavesQty">().value(5);
+        msg.get<"lastPrice">().reset();
+        msg.get<"lastQty">().reset();
+        msg.get<"rejectReason">().value(trading::RejectReason::None);
+        msg.get<"execType">().value(trading::ExecType::New);
+        msg.get<"ordStatus">().value(trading::OrdStatus::New);
+
+        auto header = trading::MessageHeader{buffer.data()};
+        auto decoded = trading::ExecutionReport{buffer, header.sbeEncodedLength(),
+            header.get<"blockLength">().value(), header.get<"version">().value()};
+        REQUIRE_FALSE(decoded.get<"lastPrice">().present());
+        REQUIRE_FALSE(decoded.get<"lastQty">().present());
+        REQUIRE_EQ(decoded.get<"execType">().value(), trading::ExecType::New);
+    }
+
+    TEST_CASE("ReplaceOrder with price only: qty stays null") {
+        std::array<std::byte, 128> buffer{};
+
+        auto msg = trading::ReplaceOrder::wrapAndApplyHeader(buffer);
+        msg.get<"clOrdId">().value(10);
+        msg.get<"origClOrdId">().value(5);
+        msg.get<"price">().value(1'250);
+        msg.get<"qty">().reset();
+
+        auto header = trading::MessageHeader{buffer.data()};
+        auto decoded = trading::ReplaceOrder{buffer, header.sbeEncodedLength(),
+            header.get<"blockLength">().value(), header.get<"version">().value()};
+        REQUIRE(decoded.get<"price">().present());
+        REQUIRE_EQ(decoded.get<"price">().value(), 1'250);
+        REQUIRE_FALSE(decoded.get<"qty">().present());
+    }
+
+    TEST_CASE("NewOrder market order: price null") {
+        std::array<std::byte, 128> buffer{};
+
+        auto msg = trading::NewOrder::wrapAndApplyHeader(buffer);
+        msg.get<"clOrdId">().value(3);
+        msg.get<"price">().reset();
+        msg.get<"qty">().value(1);
+        msg.get<"ordType">().value(trading::OrdType::Market);
+
+        auto header = trading::MessageHeader{buffer.data()};
+        auto decoded = trading::NewOrder{buffer, header.sbeEncodedLength(),
+            header.get<"blockLength">().value(), header.get<"version">().value()};
+        REQUIRE_FALSE(decoded.get<"price">().present());
+        REQUIRE(decoded.get<"ordType">().value() == trading::OrdType::Market);
     }
 }
 

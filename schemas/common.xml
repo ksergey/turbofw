@@ -1,15 +1,19 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!--
-    Types shared by all turbofw schemas. Included into each schema with XInclude:
+    <!--
+        Types shared by all turbofw schemas. Included into each schema with XInclude:
 
-        <xi:include href="common.xml"/>
+            <xi:include href="common.xml"/>
 
-    Every schema gets its own copy of these types in its own namespace (turbofw::md::Side,
-    turbofw::trading::Side, ...), but the wire encoding is identical.
+        Every schema gets its own copy of these types in its own namespace (turbofw::md::Side,
+        turbofw::trading::Side, ...), but the wire encoding is identical.
 
-    Prices and quantities are fixed-point integer mantissas. Exponents are defined per instrument
-    (md::InstrumentDefinition.priceExponent / qtyExponent) and are the same in market data and trading.
--->
+        Prices and quantities are fixed-point integer mantissas. Exponents are defined per instrument
+        (md::InstrumentDefinition.priceExponent / qtyExponent) and are the same in market data and trading.
+
+        Each scalar type also has a NULL variant (PriceNULL, QtyNULL, TimestampNULL) for fields where
+        "absent" is a meaningful state: the sentinel is the primitive's all-ones value (int64 max /
+        uint64 max), and the generated codec exposes present()/reset() for such fields.
+    -->
 <types>
     <composite name="messageHeader" description="Template ID and length of message root">
         <type name="blockLength" primitiveType="uint16"/>
@@ -27,6 +31,13 @@
     <type name="Price" primitiveType="int64" description="Fixed-point price mantissa"/>
     <type name="Qty" primitiveType="int64" description="Fixed-point quantity mantissa"/>
     <type name="InstrumentId" primitiveType="uint32" description="turbofw-wide instrument identifier"/>
+
+    <type name="TimestampNULL" primitiveType="uint64" presence="optional" nullValue="18446744073709551615"
+          description="Optional timestamp; uint64 max encodes 'absent'"/>
+    <type name="PriceNULL" primitiveType="int64" presence="optional" nullValue="9223372036854775807"
+          description="Optional price mantissa; int64 max encodes 'absent'"/>
+    <type name="QtyNULL" primitiveType="int64" presence="optional" nullValue="9223372036854775807"
+          description="Optional quantity mantissa; int64 max encodes 'absent'"/>
 
     <enum name="Side" encodingType="char">
         <validValue name="Buy">B</validValue>
