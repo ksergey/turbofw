@@ -7,8 +7,6 @@
     Conventions:
       * exchangeTime - exchange timestamp of the event, receiveTime - when the connector received it
         (both nanoseconds since the Unix epoch);
-      * seqNum - per-channel sequence number assigned by the connector, increments by one for every
-        message published to a channel (gap detection);
       * flags.EndOfEvent marks the last message of an exchange event: a book is consistent only after
         a message with EndOfEvent; several messages produced from one exchange packet share exchangeTime;
       * flags.Snapshot marks messages produced while (re)building state from a snapshot, flags.Recovery
@@ -99,28 +97,26 @@
 
     <sbe:message name="InstrumentDefinition" id="1" description="Instrument reference data">
         <field id="1" name="receiveTime" type="Timestamp"/>
-        <field id="2" name="seqNum" type="uint64"/>
-        <field id="3" name="tickSize" type="Price"/>
-        <field id="4" name="lotSize" type="Qty"/>
-        <field id="5" name="minQty" type="Qty"/>
-        <field id="6" name="contractMultiplier" type="QtyNULL"
+        <field id="2" name="tickSize" type="Price"/>
+        <field id="3" name="lotSize" type="Qty"/>
+        <field id="4" name="minQty" type="Qty"/>
+        <field id="5" name="contractMultiplier" type="QtyNULL"
                description="Null - not applicable (e.g. spot instruments)"/>
-        <field id="7" name="instrumentId" type="InstrumentId"/>
-        <field id="8" name="venueId" type="uint16"/>
-        <field id="9" name="instrumentType" type="InstrumentType"/>
-        <field id="10" name="priceExponent" type="int8"/>
-        <field id="11" name="qtyExponent" type="int8"/>
-        <field id="12" name="flags" type="MdFlags"/>
-        <field id="13" name="symbol" type="Symbol"/>
+        <field id="6" name="instrumentId" type="InstrumentId"/>
+        <field id="7" name="venueId" type="uint16"/>
+        <field id="8" name="instrumentType" type="InstrumentType"/>
+        <field id="9" name="priceExponent" type="int8"/>
+        <field id="10" name="qtyExponent" type="int8"/>
+        <field id="11" name="flags" type="MdFlags"/>
+        <field id="12" name="symbol" type="Symbol"/>
     </sbe:message>
 
     <sbe:message name="TradingStatusUpdate" id="2" description="Instrument trading phase change">
         <field id="1" name="exchangeTime" type="Timestamp"/>
         <field id="2" name="receiveTime" type="Timestamp"/>
-        <field id="3" name="seqNum" type="uint64"/>
-        <field id="4" name="instrumentId" type="InstrumentId"/>
-        <field id="5" name="status" type="TradingStatus"/>
-        <field id="6" name="flags" type="MdFlags"/>
+        <field id="3" name="instrumentId" type="InstrumentId"/>
+        <field id="4" name="status" type="TradingStatus"/>
+        <field id="5" name="flags" type="MdFlags"/>
     </sbe:message>
 
     <!-- order book: 10..29 -->
@@ -128,22 +124,20 @@
     <sbe:message name="MboUpdate" id="10" description="Market by order: change of a single order">
         <field id="1" name="exchangeTime" type="Timestamp"/>
         <field id="2" name="receiveTime" type="Timestamp"/>
-        <field id="3" name="seqNum" type="uint64"/>
-        <field id="4" name="orderId" type="uint64"/>
-        <field id="5" name="price" type="Price"/>
-        <field id="6" name="qty" type="Qty" description="Remaining (visible) qty after the action"/>
-        <field id="7" name="instrumentId" type="InstrumentId"/>
-        <field id="8" name="action" type="MboAction"/>
-        <field id="9" name="side" type="Side"/>
-        <field id="10" name="flags" type="MdFlags"/>
+        <field id="3" name="orderId" type="uint64"/>
+        <field id="4" name="price" type="Price"/>
+        <field id="5" name="qty" type="Qty" description="Remaining (visible) qty after the action"/>
+        <field id="6" name="instrumentId" type="InstrumentId"/>
+        <field id="7" name="action" type="MboAction"/>
+        <field id="8" name="side" type="Side"/>
+        <field id="9" name="flags" type="MdFlags"/>
     </sbe:message>
 
     <sbe:message name="MbpUpdate" id="20" description="Market by price: incremental level changes">
         <field id="1" name="exchangeTime" type="Timestamp"/>
         <field id="2" name="receiveTime" type="Timestamp"/>
-        <field id="3" name="seqNum" type="uint64"/>
-        <field id="4" name="instrumentId" type="InstrumentId"/>
-        <field id="5" name="flags" type="MdFlags"/>
+        <field id="3" name="instrumentId" type="InstrumentId"/>
+        <field id="4" name="flags" type="MdFlags"/>
         <group id="100" name="levels" dimensionType="groupSizeEncoding">
             <field id="1" name="price" type="Price"/>
             <field id="2" name="qty" type="Qty"/>
@@ -157,9 +151,8 @@
     <sbe:message name="MbpSnapshot" id="21" description="Market by price: full book state">
         <field id="1" name="exchangeTime" type="Timestamp"/>
         <field id="2" name="receiveTime" type="Timestamp"/>
-        <field id="3" name="seqNum" type="uint64"/>
-        <field id="4" name="instrumentId" type="InstrumentId"/>
-        <field id="5" name="flags" type="MdFlags"/>
+        <field id="3" name="instrumentId" type="InstrumentId"/>
+        <field id="4" name="flags" type="MdFlags"/>
         <group id="100" name="bids" dimensionType="groupSizeEncoding" description="Best first">
             <field id="1" name="price" type="Price"/>
             <field id="2" name="qty" type="Qty"/>
@@ -172,32 +165,17 @@
         </group>
     </sbe:message>
 
-    <sbe:message name="BestBidOffer" id="22" description="Top of the book; qty == 0 means the side is empty">
-        <field id="1" name="exchangeTime" type="Timestamp"/>
-        <field id="2" name="receiveTime" type="Timestamp"/>
-        <field id="3" name="seqNum" type="uint64"/>
-        <field id="4" name="bidPrice" type="Price"/>
-        <field id="5" name="bidQty" type="Qty"/>
-        <field id="6" name="askPrice" type="Price"/>
-        <field id="7" name="askQty" type="Qty"/>
-        <field id="8" name="instrumentId" type="InstrumentId"/>
-        <field id="9" name="bidCount" type="uint32"/>
-        <field id="10" name="askCount" type="uint32"/>
-        <field id="11" name="flags" type="MdFlags"/>
-    </sbe:message>
-
     <!-- trades: 30..39 -->
 
     <sbe:message name="Trade" id="30" description="Public trade">
         <field id="1" name="exchangeTime" type="Timestamp"/>
         <field id="2" name="receiveTime" type="Timestamp"/>
-        <field id="3" name="seqNum" type="uint64"/>
-        <field id="4" name="tradeId" type="uint64"/>
-        <field id="5" name="price" type="Price"/>
-        <field id="6" name="qty" type="Qty"/>
-        <field id="7" name="instrumentId" type="InstrumentId"/>
-        <field id="8" name="aggressorSide" type="AggressorSide"/>
-        <field id="9" name="flags" type="MdFlags"/>
+        <field id="3" name="tradeId" type="uint64"/>
+        <field id="4" name="price" type="Price"/>
+        <field id="5" name="qty" type="Qty"/>
+        <field id="6" name="instrumentId" type="InstrumentId"/>
+        <field id="7" name="aggressorSide" type="AggressorSide"/>
+        <field id="8" name="flags" type="MdFlags"/>
     </sbe:message>
 
     <!-- statistics: 40..49 -->
@@ -205,11 +183,10 @@
     <sbe:message name="Statistic" id="40" description="Session statistic">
         <field id="1" name="exchangeTime" type="Timestamp"/>
         <field id="2" name="receiveTime" type="Timestamp"/>
-        <field id="3" name="seqNum" type="uint64"/>
-        <field id="4" name="value" type="int64"
+        <field id="3" name="value" type="int64"
                description="Price mantissa for *Price stats, qty mantissa for Volume / OpenInterest, count for TradeCount"/>
-        <field id="5" name="instrumentId" type="InstrumentId"/>
-        <field id="6" name="statType" type="StatType"/>
-        <field id="7" name="flags" type="MdFlags"/>
+        <field id="4" name="instrumentId" type="InstrumentId"/>
+        <field id="5" name="statType" type="StatType"/>
+        <field id="6" name="flags" type="MdFlags"/>
     </sbe:message>
 </sbe:messageSchema>

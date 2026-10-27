@@ -14,7 +14,7 @@
 | Path | What lives there |
 |---|---|
 | `code/turbofw/` | Core library `turbofw::turbofw` (`*.h`, `*.cpp`), unit tests (`*_test.cpp`), benchmarks (`*_bm.cpp`) |
-| `schemas/md.xml` | SBE market data schema (id 1): instruments, trading status, MBO, MBP, BBO, trades, statistics → `<turbofw/md/schema.h>`, `turbofw::md` |
+| `schemas/md.xml` | SBE market data schema (id 1): instruments, trading status, MBO, MBP, trades, statistics → `<turbofw/md/schema.h>`, `turbofw::md` |
 | `schemas/trading.xml` | SBE trading schema (id 2): new / replace / cancel / mass cancel, execution reports, cancel rejects, session status → `<turbofw/trading/schema.h>`, `turbofw::trading` |
 | `schemas/common.xml` | Types shared by both schemas (message header, Price, Qty, Timestamp, Side, and their optional NULL variants: PriceNULL, QtyNULL, TimestampNULL), XIncluded into each |
 | `cmake/` | `GetCPM.cmake` (dependency bootstrap, same as in turboq) |

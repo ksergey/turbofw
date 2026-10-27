@@ -15,7 +15,6 @@ TEST_SUITE("MdSchema") {
         std::array<std::byte, 128> buffer{};
 
         auto msg = md::MboUpdate::wrapAndApplyHeader(buffer);
-        msg.get<"seqNum">().value(7);
         msg.get<"orderId">().value(123456789);
         msg.get<"price">().value(10'050);
         msg.get<"qty">().value(3);
@@ -30,7 +29,6 @@ TEST_SUITE("MdSchema") {
 
         auto decoded = md::MboUpdate{buffer, header.sbeEncodedLength(), header.get<"blockLength">().value(),
             header.get<"version">().value()};
-        REQUIRE_EQ(decoded.get<"seqNum">().value(), 7);
         REQUIRE_EQ(decoded.get<"orderId">().value(), 123456789);
         REQUIRE_EQ(decoded.get<"price">().value(), 10'050);
         REQUIRE_EQ(decoded.get<"qty">().value(), 3);
