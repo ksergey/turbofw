@@ -1,7 +1,7 @@
 set(TargetName turbofw)
 
 # Framework message protocols (SBE):
-#   schemas/<file>.xml -> <turbofw/<package>>/schema.h | namespace turbofw::<package>
+#   schemas/<file>.xml -> <turbofw/<package>>/schema.h | namespace <package>
 set(Schemas
     md:market_data_schema    # market data: package md, schemaId 1
     meta:metadata_schema     # metadata (reference data): package meta, schemaId 2

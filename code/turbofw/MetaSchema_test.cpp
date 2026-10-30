@@ -1,4 +1,4 @@
-// Copyright (c) Sergey Kovalevych <inndie@gmail.com>
+// Copyright (c) Sergey Kovalevich <inndie@gmail.com>
 // SPDX-License-Identifier: MIT
 
 #include <array>
@@ -78,7 +78,7 @@ TEST_SUITE("MetaSchema") {
         attrs.get<"serviceId">().value(3);
         attrs.get<"instrumentType">().value(meta::InstrumentType::Future);
         attrs.get<"state">().value(meta::InstrumentState::Active);
-        attrs.get<"tickSize">().value(1'000);
+        attrs.get<"tickSize">().get<"mantissa">().value(1'000);
         attrs.get<"lotSize">().value(1);
         attrs.get<"multiplier">().value(100);
         attrs.get<"expiry">().reset(); // perpetual
@@ -96,7 +96,7 @@ TEST_SUITE("MetaSchema") {
         REQUIRE_EQ(decodedAttrs.get<"serviceId">().value(), 3);
         REQUIRE(decodedAttrs.get<"instrumentType">().value() == meta::InstrumentType::Future);
         REQUIRE(decodedAttrs.get<"state">().value() == meta::InstrumentState::Active);
-        REQUIRE_EQ(decodedAttrs.get<"tickSize">().value(), 1'000);
+        REQUIRE_EQ(decodedAttrs.get<"tickSize">().get<"mantissa">().value(), 1'000);
         REQUIRE_EQ(decodedAttrs.get<"lotSize">().value(), 1);
         REQUIRE_EQ(decodedAttrs.get<"multiplier">().value(), 100);
         REQUIRE_FALSE(decodedAttrs.get<"expiry">().present());
@@ -138,7 +138,7 @@ TEST_SUITE("MetaSchema") {
         attrs.get<"serviceId">().value(3);
         attrs.get<"instrumentType">().value(meta::InstrumentType::Spot);
         attrs.get<"state">().value(meta::InstrumentState::Suspended);
-        attrs.get<"tickSize">().value(1'000);
+        attrs.get<"tickSize">().get<"mantissa">().value(1'000);
         attrs.get<"lotSize">().value(1);
         attrs.get<"multiplier">().reset(); // not applicable for spot
         attrs.get<"expiry">().reset();

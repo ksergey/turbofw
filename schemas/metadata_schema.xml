@@ -12,7 +12,7 @@
                    byteOrder="littleEndian" description="Metadata">
 
   <!-- messageHeader, groupSizeEncoding, varStringEncoding, InstrumentId, ServiceId,
-       ClientId, Timestamp, Price, Qty, *NULL types, RequestStatus -->
+       ClientId, Timestamp, Price9, Qty, *NULL types, RequestStatus -->
   <xi:include href="common_types.xml"/>
 
   <types>
@@ -65,7 +65,7 @@
       <ref  name="serviceId"      type="ServiceId"/>      <!-- market data service the instrument was created from -->
       <ref  name="instrumentType" type="InstrumentType"/>
       <ref  name="state"          type="InstrumentState"/>
-      <ref  name="tickSize"       type="PriceNULL"/>      <!-- null: no single tick size -->
+      <ref  name="tickSize"       type="Price9NULL"/>      <!-- null: no single tick size -->
       <ref  name="lotSize"        type="QtyNULL"/>
       <ref  name="multiplier"     type="QtyNULL"/>        <!-- null: not applicable -->
       <ref  name="expiry"         type="TimestampNULL"/>  <!-- null: perpetual -->

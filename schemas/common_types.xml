@@ -26,19 +26,29 @@
   <type name="ClientId"     primitiveType="uint32"/> <!-- chosen randomly by the client; 0xFFFFFFFF is reserved for null -->
   <type name="ServiceId"    primitiveType="uint16"/> <!-- 0xFFFF is reserved for null -->
   <type name="Timestamp"    primitiveType="int64"/>  <!-- ns since epoch, UTC -->
-  <type name="Price"        primitiveType="int64"/>  <!-- mantissa, fixed exponent -9 -->
   <type name="Qty"          primitiveType="int64"/>
+
+  <!-- Fixed-point price: value = mantissa * 10^exponent. The exponent is a constant (-9) and is not encoded. -->
+  <composite name="Price9" semanticType="Price">
+    <type name="mantissa" primitiveType="int64"/>
+    <type name="exponent" primitiveType="int8" presence="constant">-9</type>
+  </composite>
 
   <!-- ===== Nullable types (use together with presence="optional" on the field) ===== -->
   <type name="InstrumentIdNULL" primitiveType="uint32" presence="optional"/>
   <type name="ClientIdNULL"     primitiveType="uint32" presence="optional"/> <!-- null = no addressee (broadcast) -->
   <type name="ServiceIdNULL"    primitiveType="uint16" presence="optional"/>
   <type name="TimestampNULL"    primitiveType="int64"  presence="optional"/>
-  <type name="PriceNULL"        primitiveType="int64"  presence="optional"/>
   <type name="QtyNULL"          primitiveType="int64"  presence="optional"/>
   <type name="UInt16NULL"       primitiveType="uint16" presence="optional"/>
   <type name="UInt32NULL"       primitiveType="uint32" presence="optional"/>
   <type name="UInt64NULL"       primitiveType="uint64" presence="optional"/>
+
+  <!-- Optional Price9: a null mantissa (the default null value of int64) means "no price". -->
+  <composite name="Price9NULL" semanticType="Price">
+    <type name="mantissa" primitiveType="int64" presence="optional"/>
+    <type name="exponent" primitiveType="int8" presence="constant">-9</type>
+  </composite>
 
   <!-- ===== Common enums ===== -->
   <!-- Status of a request, used by RequestComplete in every schema -->

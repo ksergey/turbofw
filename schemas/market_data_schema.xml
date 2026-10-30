@@ -5,7 +5,7 @@
                    byteOrder="littleEndian" description="Market data">
 
   <!-- messageHeader, groupSizeEncoding, varStringEncoding, InstrumentId, Timestamp,
-       Price, Qty, *NULL types, RequestStatus -->
+       Price9, Qty, *NULL types, RequestStatus -->
   <xi:include href="common_types.xml"/>
 
   <types>
@@ -66,7 +66,7 @@
     <field name="side"   id="2" type="Side"/>
     <field name="action" id="3" type="UpdateAction"/>
     <field name="level"  id="4" type="uint8"/>
-    <field name="price"  id="5" type="PriceNULL"  presence="optional"/>
+    <field name="price"  id="5" type="Price9NULL"  presence="optional"/>
     <field name="qty"    id="6" type="QtyNULL"    presence="optional"/>
     <field name="orders" id="7" type="UInt32NULL" presence="optional"/>
   </sbe:message>
@@ -82,9 +82,9 @@
     <field name="orderId"   id="2" type="UInt64NULL" presence="optional"/>
     <field name="side"      id="3" type="Side"/>
     <field name="action"    id="4" type="UpdateAction"/>
-    <field name="price"     id="5" type="PriceNULL"  presence="optional"/>
+    <field name="price"     id="5" type="Price9NULL"  presence="optional"/>
     <field name="qty"       id="6" type="QtyNULL"    presence="optional"/>
-    <field name="prevPrice" id="7" type="PriceNULL"  presence="optional"/> <!-- Change only -->
+    <field name="prevPrice" id="7" type="Price9NULL"  presence="optional"/> <!-- Change only -->
     <field name="prevQty"   id="8" type="QtyNULL"    presence="optional"/> <!-- Change only -->
     <field name="priority"  id="9" type="UInt64NULL" presence="optional"/>
   </sbe:message>
@@ -92,7 +92,7 @@
   <sbe:message name="Trade" id="12">
     <field name="header"     id="1" type="MdHeader"/>
     <field name="tradeId"    id="2" type="UInt64NULL" presence="optional"/>
-    <field name="price"      id="3" type="Price"/>
+    <field name="price"      id="3" type="Price9"/>
     <field name="qty"        id="4" type="Qty"/>
     <field name="aggressor"  id="5" type="Side" presence="optional"/> <!-- null = unknown -->
     <field name="conditions" id="6" type="uint32"/>
@@ -104,7 +104,7 @@
   <sbe:message name="Statistic" id="13">
     <field name="header" id="1" type="MdHeader"/>
     <field name="type"   id="2" type="StatType"/>
-    <field name="price"  id="3" type="PriceNULL" presence="optional"/>
+    <field name="price"  id="3" type="Price9NULL" presence="optional"/>
     <field name="qty"    id="4" type="QtyNULL"   presence="optional"/>
   </sbe:message>
 
@@ -131,18 +131,18 @@
     <field name="lastChunk"    id="5" type="uint8"/>   <!-- 1 = last chunk -->
     <field name="tradingState" id="6" type="uint8"/>
     <group name="bids" id="7" dimensionType="groupSizeEncoding"> <!-- descending price -->
-      <field name="price"  id="1" type="Price"/>
+      <field name="price"  id="1" type="Price9"/>
       <field name="qty"    id="2" type="Qty"/>
       <field name="orders" id="3" type="UInt32NULL" presence="optional"/>
     </group>
     <group name="asks" id="8" dimensionType="groupSizeEncoding"> <!-- ascending price -->
-      <field name="price"  id="1" type="Price"/>
+      <field name="price"  id="1" type="Price9"/>
       <field name="qty"    id="2" type="Qty"/>
       <field name="orders" id="3" type="UInt32NULL" presence="optional"/>
     </group>
     <group name="stats" id="9" dimensionType="groupSizeEncoding">
       <field name="type"       id="1" type="StatType"/>
-      <field name="price"      id="2" type="PriceNULL"     presence="optional"/>
+      <field name="price"      id="2" type="Price9NULL"     presence="optional"/>
       <field name="qty"        id="3" type="QtyNULL"       presence="optional"/>
       <field name="exchangeTs" id="4" type="TimestampNULL" presence="optional"/>
     </group>

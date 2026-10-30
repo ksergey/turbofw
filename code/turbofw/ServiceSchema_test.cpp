@@ -1,4 +1,4 @@
-// Copyright (c) Sergey Kovalevych <inndie@gmail.com>
+// Copyright (c) Sergey Kovalevich <inndie@gmail.com>
 // SPDX-License-Identifier: MIT
 
 #include <array>

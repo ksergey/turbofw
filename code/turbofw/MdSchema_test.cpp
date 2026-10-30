@@ -1,4 +1,4 @@
-// Copyright (c) Sergey Kovalevych <inndie@gmail.com>
+// Copyright (c) Sergey Kovalevich <inndie@gmail.com>
 // SPDX-License-Identifier: MIT
 
 #include <array>
@@ -23,7 +23,7 @@ TEST_SUITE("MdSchema") {
         msg.get<"side">().value(md::Side::Bid);
         msg.get<"action">().value(md::UpdateAction::Change);
         msg.get<"level">().value(3);
-        msg.get<"price">().value(10'050);
+        msg.get<"price">().get<"mantissa">().value(10'050);
         msg.get<"qty">().value(3);
         msg.get<"orders">().value(12);
 
@@ -44,7 +44,7 @@ TEST_SUITE("MdSchema") {
         REQUIRE(decoded.get<"action">().value() == md::UpdateAction::Change);
         REQUIRE_EQ(decoded.get<"level">().value(), 3);
         REQUIRE(decoded.get<"price">().present());
-        REQUIRE_EQ(decoded.get<"price">().value(), 10'050);
+        REQUIRE_EQ(decoded.get<"price">().get<"mantissa">().value(), 10'050);
         REQUIRE(decoded.get<"qty">().present());
         REQUIRE_EQ(decoded.get<"qty">().value(), 3);
         REQUIRE(decoded.get<"orders">().present());
@@ -63,9 +63,9 @@ TEST_SUITE("MdSchema") {
         msg.get<"orderId">().value(123'456'789u);
         msg.get<"side">().value(md::Side::Ask);
         msg.get<"action">().value(md::UpdateAction::Change);
-        msg.get<"price">().value(10'050);
+        msg.get<"price">().get<"mantissa">().value(10'050);
         msg.get<"qty">().value(3);
-        msg.get<"prevPrice">().value(10'048);
+        msg.get<"prevPrice">().get<"mantissa">().value(10'048);
         msg.get<"prevQty">().value(5);
         msg.get<"priority">().value(7u);
 
@@ -83,9 +83,9 @@ TEST_SUITE("MdSchema") {
         REQUIRE(decoded.get<"side">().value() == md::Side::Ask);
         REQUIRE(decoded.get<"action">().value() == md::UpdateAction::Change);
         REQUIRE(decoded.get<"price">().present());
-        REQUIRE_EQ(decoded.get<"price">().value(), 10'050);
+        REQUIRE_EQ(decoded.get<"price">().get<"mantissa">().value(), 10'050);
         REQUIRE_EQ(decoded.get<"qty">().value(), 3);
-        REQUIRE_EQ(decoded.get<"prevPrice">().value(), 10'048);
+        REQUIRE_EQ(decoded.get<"prevPrice">().get<"mantissa">().value(), 10'048);
         REQUIRE_EQ(decoded.get<"prevQty">().value(), 5);
         REQUIRE_EQ(decoded.get<"priority">().value(), 7u);
     }
@@ -97,9 +97,9 @@ TEST_SUITE("MdSchema") {
         msg.get<"header">().get<"instrumentId">().value(42);
         msg.get<"orderId">().reset(); // Clear: orderId is not meaningful
         msg.get<"action">().value(md::UpdateAction::Clear);
-        msg.get<"price">().reset();
+        msg.get<"price">().get<"mantissa">().reset();
         msg.get<"qty">().reset();
-        msg.get<"prevPrice">().reset();
+        msg.get<"prevPrice">().get<"mantissa">().reset();
         msg.get<"prevQty">().reset();
 
         auto mdHeader = md::MessageHeader{buffer.data()};
@@ -113,6 +113,21 @@ TEST_SUITE("MdSchema") {
         REQUIRE_FALSE(decoded.get<"prevQty">().present());
     }
 
+    TEST_CASE("Price9: constant exponent -9, only the mantissa is encoded") {
+        static_assert(md::Price9::sbeEncodedLength() == sizeof(std::int64_t));
+        static_assert(md::Price9NULL::sbeEncodedLength() == sizeof(std::int64_t));
+
+        std::array<std::byte, 128> buffer{};
+        auto msg = md::Trade::wrapAndApplyHeader(buffer);
+        msg.get<"price">().get<"mantissa">().value(1'500'000'000); // 1.5
+
+        auto mdHeader = md::MessageHeader{buffer.data()};
+        auto decoded = md::Trade{buffer, mdHeader.sbeEncodedLength(), mdHeader.get<"blockLength">().value(),
+            mdHeader.get<"version">().value()};
+        REQUIRE_EQ(decoded.get<"price">().get<"mantissa">().value(), 1'500'000'000);
+        REQUIRE_EQ(decoded.get<"price">().get<"exponent">().value(), -9);
+    }
+
     TEST_CASE("Trade round trip") {
         std::array<std::byte, 128> buffer{};
 
@@ -123,7 +138,7 @@ TEST_SUITE("MdSchema") {
         header.get<"receiveTs">().value(9'876'543'210);
         header.get<"flags">().value(md::MdFlags{});
         msg.get<"tradeId">().value(987'654'321u);
-        msg.get<"price">().value(10'050);
+        msg.get<"price">().get<"mantissa">().value(10'050);
         msg.get<"qty">().value(3);
         msg.get<"aggressor">().value(md::Side::Ask);
         msg.get<"conditions">().value(0u);
@@ -137,7 +152,7 @@ TEST_SUITE("MdSchema") {
         REQUIRE_EQ(decoded.get<"header">().get<"instrumentId">().value(), 42);
         REQUIRE(decoded.get<"tradeId">().present());
         REQUIRE_EQ(decoded.get<"tradeId">().value(), 987'654'321u);
-        REQUIRE_EQ(decoded.get<"price">().value(), 10'050);
+        REQUIRE_EQ(decoded.get<"price">().get<"mantissa">().value(), 10'050);
         REQUIRE_EQ(decoded.get<"qty">().value(), 3);
         REQUIRE(decoded.get<"aggressor">().present());
         REQUIRE(decoded.get<"aggressor">().value() == md::Side::Ask);
@@ -150,7 +165,7 @@ TEST_SUITE("MdSchema") {
         auto msg = md::Trade::wrapAndApplyHeader(buffer);
         msg.get<"header">().get<"instrumentId">().value(42);
         msg.get<"tradeId">().reset(); // venue does not provide trade id
-        msg.get<"price">().value(10'050);
+        msg.get<"price">().get<"mantissa">().value(10'050);
         msg.get<"qty">().value(3);
         msg.get<"aggressor">().reset();
 
@@ -167,7 +182,7 @@ TEST_SUITE("MdSchema") {
         auto msg = md::Statistic::wrapAndApplyHeader(buffer);
         msg.get<"header">().get<"instrumentId">().value(42);
         msg.get<"type">().value(md::StatType::Volume);
-        msg.get<"price">().reset(); // price-like field is not used by Volume
+        msg.get<"price">().get<"mantissa">().reset(); // price-like field is not used by Volume
         msg.get<"qty">().value(1'250'000);
 
         auto mdHeader = md::MessageHeader{buffer.data()};
@@ -186,14 +201,14 @@ TEST_SUITE("MdSchema") {
         auto msg = md::Statistic::wrapAndApplyHeader(buffer);
         msg.get<"header">().get<"instrumentId">().value(42);
         msg.get<"type">().value(md::StatType::Vwap);
-        msg.get<"price">().value(10'047);
+        msg.get<"price">().get<"mantissa">().value(10'047);
         msg.get<"qty">().reset();
 
         auto mdHeader = md::MessageHeader{buffer.data()};
         auto decoded = md::Statistic{buffer, mdHeader.sbeEncodedLength(), mdHeader.get<"blockLength">().value(),
             mdHeader.get<"version">().value()};
         REQUIRE(decoded.get<"type">().value() == md::StatType::Vwap);
-        REQUIRE_EQ(decoded.get<"price">().value(), 10'047);
+        REQUIRE_EQ(decoded.get<"price">().get<"mantissa">().value(), 10'047);
         REQUIRE_FALSE(decoded.get<"qty">().present());
     }
 
@@ -230,21 +245,21 @@ TEST_SUITE("MdSchema") {
         bids.reset(2);
         for (std::int64_t i = 0; bids.hasNext(); ++i) {
             auto& level = bids.next();
-            level.get<"price">().value(100 - i);
+            level.get<"price">().get<"mantissa">().value(100 - i);
             level.get<"qty">().value(10 + i);
             level.get<"orders">().value(1);
         }
         auto asks = msg.get<"asks">(); // ascending price
         asks.reset(1);
         auto& ask = asks.next();
-        ask.get<"price">().value(101);
+        ask.get<"price">().get<"mantissa">().value(101);
         ask.get<"qty">().value(7);
         ask.get<"orders">().reset();
         auto stats = msg.get<"stats">();
         stats.reset(1);
         auto& stat = stats.next();
         stat.get<"type">().value(md::StatType::Open);
-        stat.get<"price">().value(99);
+        stat.get<"price">().get<"mantissa">().value(99);
         stat.get<"qty">().reset();
         stat.get<"exchangeTs">().value(1'000'000'000);
 
@@ -266,20 +281,20 @@ TEST_SUITE("MdSchema") {
 
         auto decodedBids = decoded.get<"bids">();
         REQUIRE_EQ(decodedBids.count(), 2);
-        REQUIRE_EQ(decodedBids.next().get<"price">().value(), 100);
-        REQUIRE_EQ(decodedBids.next().get<"price">().value(), 99);
+        REQUIRE_EQ(decodedBids.next().get<"price">().get<"mantissa">().value(), 100);
+        REQUIRE_EQ(decodedBids.next().get<"price">().get<"mantissa">().value(), 99);
 
         auto decodedAsks = decoded.get<"asks">();
         REQUIRE_EQ(decodedAsks.count(), 1);
         auto decodedAsk = decodedAsks.next();
-        REQUIRE_EQ(decodedAsk.get<"price">().value(), 101);
+        REQUIRE_EQ(decodedAsk.get<"price">().get<"mantissa">().value(), 101);
         REQUIRE_FALSE(decodedAsk.get<"orders">().present());
 
         auto decodedStats = decoded.get<"stats">();
         REQUIRE_EQ(decodedStats.count(), 1);
         auto decodedStat = decodedStats.next();
         REQUIRE(decodedStat.get<"type">().value() == md::StatType::Open);
-        REQUIRE_EQ(decodedStat.get<"price">().value(), 99);
+        REQUIRE_EQ(decodedStat.get<"price">().get<"mantissa">().value(), 99);
         REQUIRE_FALSE(decodedStat.get<"qty">().present());
         REQUIRE_EQ(decodedStat.get<"exchangeTs">().value(), 1'000'000'000);
     }

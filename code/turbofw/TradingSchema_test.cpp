@@ -1,4 +1,4 @@
-// Copyright (c) Sergey Kovalevych <inndie@gmail.com>
+// Copyright (c) Sergey Kovalevich <inndie@gmail.com>
 // SPDX-License-Identifier: MIT
 
 #include <array>
@@ -91,8 +91,8 @@ TEST_SUITE("TradingSchema") {
         msg.get<"side">().value(trd::OrderSide::Buy);
         msg.get<"orderType">().value(trd::OrderType::Limit);
         msg.get<"timeInForce">().value(trd::TimeInForce::Gtd);
-        msg.get<"price">().value(10'050);
-        msg.get<"stopPrice">().reset(); // stop price is not used by Limit
+        msg.get<"price">().get<"mantissa">().value(10'050);
+        msg.get<"stopPrice">().get<"mantissa">().reset(); // stop price is not used by Limit
         msg.get<"qty">().value(5);
         msg.get<"displayQty">().value(1);
         msg.get<"expireTs">().value(1'775'000'000'000'000'000);
@@ -110,7 +110,7 @@ TEST_SUITE("TradingSchema") {
         REQUIRE(decoded.get<"orderType">().value() == trd::OrderType::Limit);
         REQUIRE(decoded.get<"timeInForce">().value() == trd::TimeInForce::Gtd);
         REQUIRE(decoded.get<"price">().present());
-        REQUIRE_EQ(decoded.get<"price">().value(), 10'050);
+        REQUIRE_EQ(decoded.get<"price">().get<"mantissa">().value(), 10'050);
         REQUIRE_FALSE(decoded.get<"stopPrice">().present());
         REQUIRE_EQ(decoded.get<"qty">().value(), 5);
         REQUIRE_EQ(decoded.get<"displayQty">().value(), 1);
@@ -130,8 +130,8 @@ TEST_SUITE("TradingSchema") {
         msg.get<"side">().value(trd::OrderSide::Sell);
         msg.get<"orderType">().value(trd::OrderType::Market);
         msg.get<"timeInForce">().value(trd::TimeInForce::Ioc);
-        msg.get<"price">().reset();
-        msg.get<"stopPrice">().reset();
+        msg.get<"price">().get<"mantissa">().reset();
+        msg.get<"stopPrice">().get<"mantissa">().reset();
         msg.get<"qty">().value(1);
         msg.get<"displayQty">().reset();
         msg.get<"expireTs">().reset();
@@ -154,8 +154,8 @@ TEST_SUITE("TradingSchema") {
         msg.get<"side">().value(trd::OrderSide::Sell);
         msg.get<"orderType">().value(trd::OrderType::StopMarket);
         msg.get<"timeInForce">().value(trd::TimeInForce::Day);
-        msg.get<"price">().reset();
-        msg.get<"stopPrice">().value(9'900);
+        msg.get<"price">().get<"mantissa">().reset();
+        msg.get<"stopPrice">().get<"mantissa">().value(9'900);
         msg.get<"qty">().value(2);
         msg.get<"displayQty">().reset();
         msg.get<"expireTs">().reset();
@@ -166,7 +166,7 @@ TEST_SUITE("TradingSchema") {
             buffer, header.sbeEncodedLength(), header.get<"blockLength">().value(), header.get<"version">().value()};
         REQUIRE_FALSE(decoded.get<"price">().present());
         REQUIRE(decoded.get<"stopPrice">().present());
-        REQUIRE_EQ(decoded.get<"stopPrice">().value(), 9'900);
+        REQUIRE_EQ(decoded.get<"stopPrice">().get<"mantissa">().value(), 9'900);
         REQUIRE(decoded.get<"orderType">().value() == trd::OrderType::StopMarket);
     }
 
@@ -177,8 +177,8 @@ TEST_SUITE("TradingSchema") {
         msg.get<"contextId">().value(5);
         msg.get<"requestId">().value(4);
         msg.get<"orderRef">().value(99u);
-        msg.get<"price">().value(10'060);
-        msg.get<"stopPrice">().reset();
+        msg.get<"price">().get<"mantissa">().value(10'060);
+        msg.get<"stopPrice">().get<"mantissa">().reset();
         msg.get<"qty">().reset();
 
         auto header = trd::MessageHeader{buffer.data()};
@@ -187,7 +187,7 @@ TEST_SUITE("TradingSchema") {
             buffer, header.sbeEncodedLength(), header.get<"blockLength">().value(), header.get<"version">().value()};
         REQUIRE_EQ(decoded.get<"orderRef">().value(), 99u);
         REQUIRE(decoded.get<"price">().present());
-        REQUIRE_EQ(decoded.get<"price">().value(), 10'060);
+        REQUIRE_EQ(decoded.get<"price">().get<"mantissa">().value(), 10'060);
         REQUIRE_FALSE(decoded.get<"stopPrice">().present());
         REQUIRE_FALSE(decoded.get<"qty">().present());
     }
@@ -269,12 +269,12 @@ TEST_SUITE("TradingSchema") {
         msg.get<"execType">().value(trd::ExecType::Trade);
         msg.get<"orderStatus">().value(trd::OrderStatus::PartiallyFilled);
         msg.get<"side">().value(trd::OrderSide::Buy);
-        msg.get<"price">().value(10'050);
+        msg.get<"price">().get<"mantissa">().value(10'050);
         msg.get<"orderQty">().value(5);
         msg.get<"leavesQty">().value(3);
         msg.get<"cumQty">().value(2);
         msg.get<"lastQty">().value(2);
-        msg.get<"lastPx">().value(10'051);
+        msg.get<"lastPx">().get<"mantissa">().value(10'051);
         msg.get<"tradeId">().value(7'654'321u);
         msg.get<"exchangeOrderId">().value(123'456u);
         msg.get<"reason">().value(trd::ResultCode::Ok);
@@ -292,7 +292,7 @@ TEST_SUITE("TradingSchema") {
         REQUIRE(decoded.get<"lastQty">().present());
         REQUIRE_EQ(decoded.get<"lastQty">().value(), 2);
         REQUIRE(decoded.get<"lastPx">().present());
-        REQUIRE_EQ(decoded.get<"lastPx">().value(), 10'051);
+        REQUIRE_EQ(decoded.get<"lastPx">().get<"mantissa">().value(), 10'051);
         REQUIRE_EQ(decoded.get<"tradeId">().value(), 7'654'321u);
         REQUIRE(decoded.get<"execType">().value() == trd::ExecType::Trade);
         REQUIRE(decoded.get<"orderStatus">().value() == trd::OrderStatus::PartiallyFilled);
@@ -310,12 +310,12 @@ TEST_SUITE("TradingSchema") {
         msg.get<"execType">().value(trd::ExecType::New);
         msg.get<"orderStatus">().value(trd::OrderStatus::New);
         msg.get<"side">().value(trd::OrderSide::Buy);
-        msg.get<"price">().value(10'050);
+        msg.get<"price">().get<"mantissa">().value(10'050);
         msg.get<"orderQty">().value(5);
         msg.get<"leavesQty">().value(5);
         msg.get<"cumQty">().value(0);
         msg.get<"lastQty">().reset();
-        msg.get<"lastPx">().reset();
+        msg.get<"lastPx">().get<"mantissa">().reset();
         msg.get<"tradeId">().reset();
         msg.get<"exchangeOrderId">().reset();
         msg.get<"reason">().value(trd::ResultCode::Ok);

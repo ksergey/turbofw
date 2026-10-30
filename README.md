@@ -18,7 +18,7 @@
 | `schemas/metadata_schema.xml` | SBE metadata schema (package `meta`, schemaId 2): instrument definitions, metadata service registration and requests → `<turbofw/meta/schema.h>`, namespace `meta` |
 | `schemas/trading_schema.xml` | SBE trading schema (package `trd`, schemaId 3): contexts, new/replace/cancel orders and status, execution reports, command rejects → `<turbofw/trd/schema.h>`, namespace `trd` |
 | `schemas/service_schema.xml` | SBE service schema (package `svc`, schemaId 4): heartbeats and runtime log level, shared by every service → `<turbofw/svc/schema.h>`, namespace `svc` |
-| `schemas/common_types.xml` | Types shared by all schemas (message header, group size, InstrumentId, ClientId, Price, Qty, Timestamp, their NULL variants and RequestStatus), XIncluded into each |
+| `schemas/common_types.xml` | Types shared by all schemas (message header, group size, InstrumentId, ClientId, Price9, Qty, Timestamp, their NULL variants and RequestStatus), XIncluded into each |
 | `cmake/` | `GetCPM.cmake` (dependency bootstrap, same as in turboq) |
 
 ## Dependencies
