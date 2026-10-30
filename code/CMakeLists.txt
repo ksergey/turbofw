@@ -1,18 +1,28 @@
 set(TargetName turbofw)
 
-# Framework message protocols (SBE): schemas/<name>.xml -> <turbofw/<name>/schema.h>, namespace turbofw::<name>
-foreach (schema md trading)
-    SbeMakeCodec(${TargetName}-${schema}-sbe
-        SCHEMA ${PROJECT_SOURCE_DIR}/schemas/${schema}.xml
-        OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/sbe-${schema}
+# Framework message protocols (SBE):
+#   schemas/<file>.xml -> <turbofw/<package>>/schema.h | namespace turbofw::<package>
+set(Schemas
+    md:market_data_schema    # market data: package md, schemaId 1
+    meta:metadata_schema     # metadata (reference data): package meta, schemaId 2
+    trd:trading_schema       # trading connector: package trd, schemaId 3
+    svc:service_schema)      # common service messages: package svc, schemaId 4
+
+foreach (entry IN LISTS Schemas)
+    string(REPLACE ":" ";" entry "${entry}")
+    list(GET entry 0 package)
+    list(GET entry 1 file)
+    SbeMakeCodec(${TargetName}-${package}-sbe
+        SCHEMA ${PROJECT_SOURCE_DIR}/schemas/${file}.xml
+        OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/sbe-${package}
         GENERATOR cpp-min
-        INCLUDE_BASE turbofw/${schema})
+        INCLUDE_BASE turbofw/${package})
     # SbeMakeCodec() only tracks the schema file itself; regenerate when the XIncluded common types change
     add_custom_command(
-        OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/sbe-${schema}/turbofw/${schema}/schema.h
+        OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/sbe-${package}/turbofw/${package}/schema.h
         APPEND
-        DEPENDS ${PROJECT_SOURCE_DIR}/schemas/common.xml)
-    add_library(${TargetName}::${schema}-sbe ALIAS ${TargetName}-${schema}-sbe)
+        DEPENDS ${PROJECT_SOURCE_DIR}/schemas/common_types.xml)
+    add_library(${TargetName}::${package}-sbe ALIAS ${TargetName}-${package}-sbe)
 endforeach()
 
 add_library(${TargetName} STATIC)
@@ -28,7 +38,8 @@ target_compile_options(${TargetName}
 target_include_directories(${TargetName}
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(${TargetName}
-    PUBLIC turboq::turboq turboq::reactor ${TargetName}::md-sbe ${TargetName}::trading-sbe)
+    PUBLIC turboq::turboq turboq::reactor ${TargetName}::md-sbe ${TargetName}::meta-sbe ${TargetName}::trd-sbe
+        ${TargetName}::svc-sbe)
 
 if (turbofw_SANITIZER AND turbofw_TSAN)
     message(FATAL_ERROR "turbofw_SANITIZER (ASan/UBSan/LeakSanitizer) and turbofw_TSAN (ThreadSanitizer) "

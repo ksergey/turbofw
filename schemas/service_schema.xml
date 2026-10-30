@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Messages common to every service (md connectors, trading connectors, Metadata).
+     They are published on the service's multicast queue next to the service's own
+     messages, so a queue carries two schemas. Consumers dispatch by schemaId (from
+     messageHeader); templateIds here start at 100 so they do not overlap with the
+     templateIds of the other schemas. -->
+<sbe:messageSchema xmlns:sbe="http://fixprotocol.io/2016/sbe"
+                   xmlns:xi="http://www.w3.org/2001/XInclude"
+                   package="svc" id="4" version="0" semanticVersion="0.1"
+                   byteOrder="littleEndian" description="Service">
+
+  <!-- messageHeader, ServiceIdNULL, ClientId, ClientIdNULL, Timestamp -->
+  <xi:include href="common_types.xml"/>
+
+  <types>
+    <!-- Event flags are set only on the heartbeat that reports the event.
+         State flags are set on every heartbeat while the condition holds. -->
+    <set name="ServiceFlags" encodingType="uint16">
+      <!-- Event: the service instance has just started. All state kept in memory by
+           the previous instance (e.g. trading contexts) is gone. -->
+      <choice name="Start">0</choice>
+      <!-- Event: graceful shutdown, the service stops publishing. -->
+      <choice name="Stop">1</choice>
+      <!-- State: no connection to the upstream (venue); data may be stale and
+           commands cannot be executed. -->
+      <choice name="NotConnected">2</choice>
+      <!-- State: the service is restoring its state (md: recovery snapshots are
+           being published; trading: orders are being re-synchronized with the venue). -->
+      <choice name="Recovering">3</choice>
+      <!-- bits 4..15 are reserved -->
+    </set>
+
+    <enum name="LogLevel" encodingType="uint8">
+      <validValue name="Trace">0</validValue>
+      <validValue name="Debug">1</validValue>
+      <validValue name="Info">2</validValue>
+      <validValue name="Warn">3</validValue>
+      <validValue name="Error">4</validValue>
+      <validValue name="Off">5</validValue>
+    </enum>
+  </types>
+
+  <!-- Published on events (flags change, start, stop) and, when the service has not
+       published anything else for intervalMs, periodically.
+       clientId = null, requestId = 0 for spontaneous heartbeats; the response to
+       HeartbeatRequest echoes clientId and requestId.
+       A consumer should treat the service as lost when it has received nothing
+       from it for several intervalMs.
+       startTs identifies the service instance: a change means the service restarted,
+       even if the Start heartbeat was missed. -->
+  <sbe:message name="Heartbeat" id="100">
+    <field name="clientId"   id="1" type="ClientIdNULL"  presence="optional"/>
+    <field name="requestId"  id="2" type="uint64"/>
+    <field name="serviceId"  id="3" type="ServiceIdNULL" presence="optional"/> <!-- null if the service has no id -->
+    <field name="startTs"    id="4" type="Timestamp"/>   <!-- start time of this service instance -->
+    <field name="ts"         id="5" type="Timestamp"/>   <!-- time the heartbeat was published -->
+    <field name="intervalMs" id="6" type="uint32"/>      <!-- idle heartbeat interval, 0 = no periodic heartbeats -->
+    <field name="flags"      id="7" type="ServiceFlags"/>
+  </sbe:message>
+
+  <!-- Sent to the service's MPSC queue. Response: Heartbeat on the multicast queue.
+       Lets a late-joining consumer learn the current state without waiting for the
+       next periodic heartbeat. -->
+  <sbe:message name="HeartbeatRequest" id="101">
+    <field name="clientId"  id="1" type="ClientId"/>
+    <field name="requestId" id="2" type="uint64"/>
+  </sbe:message>
+
+  <!-- Changes the log level of the service at runtime. Sent to the service's MPSC
+       queue. Response: SetLogLevelResult on the multicast queue. -->
+  <sbe:message name="SetLogLevel" id="102">
+    <field name="clientId"  id="1" type="ClientId"/>
+    <field name="requestId" id="2" type="uint64"/>
+    <field name="level"     id="3" type="LogLevel"/>
+  </sbe:message>
+
+  <!-- level: the log level in effect after the request (unchanged if the request
+       was not Ok). status: Ok, or InvalidRequest for an unknown level. -->
+  <sbe:message name="SetLogLevelResult" id="103">
+    <field name="clientId"  id="1" type="ClientId"/>
+    <field name="requestId" id="2" type="uint64"/>
+    <field name="status"    id="3" type="RequestStatus"/>
+    <field name="level"     id="4" type="LogLevel"/>
+  </sbe:message>
+</sbe:messageSchema>

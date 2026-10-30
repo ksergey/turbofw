@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Common types shared by all schemas (md, ref).
+     Included with <xi:include href="common_types.xml"/> at the top level of
+     <sbe:messageSchema>, before the schema's own <types>.
+     Do not change existing types in an incompatible way: every schema
+     that includes this file is affected. -->
+<types>
+  <!-- ===== Service composites ===== -->
+  <composite name="messageHeader">
+    <type name="blockLength" primitiveType="uint16"/>
+    <type name="templateId"  primitiveType="uint16"/>
+    <type name="schemaId"    primitiveType="uint16"/>
+    <type name="version"     primitiveType="uint16"/>
+  </composite>
+  <composite name="groupSizeEncoding">
+    <type name="blockLength" primitiveType="uint16"/>
+    <type name="numInGroup"  primitiveType="uint16"/>
+  </composite>
+  <composite name="varStringEncoding">
+    <type name="length"  primitiveType="uint16"/>
+    <type name="varData" primitiveType="uint8" length="0" characterEncoding="UTF-8"/>
+  </composite>
+
+  <!-- ===== Mandatory (non-nullable) types ===== -->
+  <type name="InstrumentId" primitiveType="uint32"/> <!-- 0xFFFFFFFF is reserved for null -->
+  <type name="ClientId"     primitiveType="uint32"/> <!-- chosen randomly by the client; 0xFFFFFFFF is reserved for null -->
+  <type name="ServiceId"    primitiveType="uint16"/> <!-- 0xFFFF is reserved for null -->
+  <type name="Timestamp"    primitiveType="int64"/>  <!-- ns since epoch, UTC -->
+  <type name="Price"        primitiveType="int64"/>  <!-- mantissa, fixed exponent -9 -->
+  <type name="Qty"          primitiveType="int64"/>
+
+  <!-- ===== Nullable types (use together with presence="optional" on the field) ===== -->
+  <type name="InstrumentIdNULL" primitiveType="uint32" presence="optional"/>
+  <type name="ClientIdNULL"     primitiveType="uint32" presence="optional"/> <!-- null = no addressee (broadcast) -->
+  <type name="ServiceIdNULL"    primitiveType="uint16" presence="optional"/>
+  <type name="TimestampNULL"    primitiveType="int64"  presence="optional"/>
+  <type name="PriceNULL"        primitiveType="int64"  presence="optional"/>
+  <type name="QtyNULL"          primitiveType="int64"  presence="optional"/>
+  <type name="UInt16NULL"       primitiveType="uint16" presence="optional"/>
+  <type name="UInt32NULL"       primitiveType="uint32" presence="optional"/>
+  <type name="UInt64NULL"       primitiveType="uint64" presence="optional"/>
+
+  <!-- ===== Common enums ===== -->
+  <!-- Status of a request, used by RequestComplete in every schema -->
+  <enum name="RequestStatus" encodingType="uint8">
+    <validValue name="Ok">0</validValue>
+    <validValue name="UnknownInstrument">1</validValue> <!-- no such instrument / no match -->
+    <validValue name="NotAvailable">2</validValue>      <!-- e.g. no data / not subscribed -->
+    <validValue name="Rejected">3</validValue>
+    <validValue name="InvalidRequest">4</validValue>
+  </enum>
+</types>

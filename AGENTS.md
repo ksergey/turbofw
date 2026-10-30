@@ -11,9 +11,11 @@ with SBE-encoded messages. Latency is the product: every change to a hot path mu
 | `code/turbofw/*.{h,cpp}` | Core library `turbofw::turbofw` |
 | `code/turbofw/*_test.cpp` | doctest unit tests, one executable per file (auto-discovered) |
 | `code/turbofw/*_bm.cpp` | google-benchmark benchmarks, one executable per file (auto-discovered) |
-| `schemas/md.xml` | SBE market data schema (schemaId 1) → `<turbofw/md/schema.h>`, namespace `turbofw::md` |
-| `schemas/trading.xml` | SBE trading schema (schemaId 2) → `<turbofw/trading/schema.h>`, namespace `turbofw::trading` |
-| `schemas/common.xml` | Shared types, XIncluded into every schema |
+| `schemas/market_data_schema.xml` | SBE market data schema (package `md`, schemaId 1) → `<turbofw/md/schema.h>`, namespace `md` |
+| `schemas/metadata_schema.xml` | SBE metadata schema (package `meta`, schemaId 2) → `<turbofw/meta/schema.h>`, namespace `meta` |
+| `schemas/trading_schema.xml` | SBE trading schema (package `trd`, schemaId 3) → `<turbofw/trd/schema.h>`, namespace `trd` |
+| `schemas/service_schema.xml` | SBE service schema (package `svc`, schemaId 4) → `<turbofw/svc/schema.h>`, namespace `svc` |
+| `schemas/common_types.xml` | Shared types, XIncluded into every schema |
 | `cmake/` | `GetCPM.cmake` (dependency bootstrap); test/bench discovery comes from turboq's `TurboQHelpers.cmake` (available after adding turboq) |
 | `.github/workflows/build-and-test.yml` | CI: compiler matrix, sanitizers |
 
@@ -66,10 +68,12 @@ dependencies are pinned to stable releases. Don't add a dependency without updat
 - Schemas are wire contracts between independently built processes. Changing field order, types or template ids
   is a breaking change: bump the schema `version` and call it out. Adding fields at the end of a message block
   with `sinceVersion` is the compatible way to extend a message.
-- One schema per protocol (`md`, `trading`), each with its own `schemaId`, so a consumer can demultiplex by
-  `(schemaId, templateId)` from the message header. A new protocol gets a new schema file and schemaId and is
-  added to the `foreach` in `code/CMakeLists.txt`.
-- Shared types live in `schemas/common.xml`; each schema gets its own copy of them in its own namespace, so
-  `md::Side` and `trading::Side` are distinct C++ types with identical encoding.
+- One schema per protocol (`md`, `meta`, `trd`) plus `svc` with messages common to every service, each with its own
+  `schemaId`, so a consumer can demultiplex a queue carrying two schemas by `(schemaId, templateId)` from the
+  message header. A new protocol gets a new schema file and schemaId and is added to the `foreach` in
+  `code/CMakeLists.txt`.
+- Shared types live in `schemas/common_types.xml`; each schema gets its own copy of them in its own namespace, so
+  `md::Side` and `trd::OrderSide` are distinct C++ types with identical encoding.
 - Order fields by size (8, 4, 2, 1 bytes) to keep them naturally aligned.
-- Prices and quantities are fixed-point mantissas; exponents come from `md::InstrumentDefinition`.
+- Prices and quantities are fixed-point mantissas; exponents come from `meta::InstrumentAttributes`
+  (tickSize, lotSize, multiplier).

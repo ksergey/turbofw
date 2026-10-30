@@ -1,0 +1,236 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Trading connector: order entry and execution reports.
+
+     Like every service in the system, a trading connector has two queues:
+       - MPSC queue: receives requests from clients;
+       - multicast queue: publishes responses and execution reports.
+     Clients match messages themselves: contextId (unique across all clients,
+     assigned by the connector) and requestId.
+
+     Workflow:
+       1. The client sends CreateContext (instrument, client code, account) and gets
+          contextId in ContextResult. clientId + requestId match that single response.
+          A context lives until the connector restarts. How contextId is allocated and how
+          creation parameters are stored is up to the connector. After a restart all
+          contexts are gone: clients detect it by the service Heartbeat (Start flag or a
+          changed startTs, see service_schema.xml) and must create their contexts again.
+       2. All order commands carry contextId. The client identifies its orders with
+          orderRef, chosen by the client and unique within a context.
+          The connector generates ClOrdID (venue-specific) and keeps the mapping
+          orderRef <-> ClOrdID <-> exchange order id. For a Replace the orderRef stays
+          the same; the connector issues a new ClOrdID internally.
+       3. Every command carries a requestId. ExecutionReport and CommandReject echo it,
+          requestId = 0 means the report is unsolicited (fill, exchange-side cancel). -->
+<sbe:messageSchema xmlns:sbe="http://fixprotocol.io/2016/sbe"
+                   xmlns:xi="http://www.w3.org/2001/XInclude"
+                   package="trd" id="3" version="0" semanticVersion="0.1"
+                   byteOrder="littleEndian" description="Trading">
+
+  <!-- messageHeader, groupSizeEncoding, varStringEncoding, InstrumentId, ClientId,
+       Timestamp, Price, Qty, *NULL types -->
+  <xi:include href="common_types.xml"/>
+
+  <types>
+    <!-- ===== Types ===== -->
+    <type name="ContextId" primitiveType="uint32"/> <!-- assigned by the connector; 0xFFFFFFFF is reserved for null -->
+    <type name="ContextIdNULL" primitiveType="uint32" presence="optional"/>
+    <!-- Client-assigned order reference, unique within a context -->
+    <type name="OrderRef" primitiveType="uint64"/>
+
+    <!-- ===== Enums ===== -->
+    <enum name="OrderSide" encodingType="uint8">
+      <validValue name="Buy">0</validValue>
+      <validValue name="Sell">1</validValue>
+    </enum>
+
+    <enum name="OrderType" encodingType="uint8">
+      <validValue name="Limit">0</validValue>
+      <validValue name="Market">1</validValue>
+      <validValue name="StopMarket">2</validValue>
+      <validValue name="StopLimit">3</validValue>
+    </enum>
+
+    <enum name="TimeInForce" encodingType="uint8">
+      <validValue name="Day">0</validValue>
+      <validValue name="Gtc">1</validValue>
+      <validValue name="Ioc">2</validValue>
+      <validValue name="Fok">3</validValue>
+      <validValue name="Gtd">4</validValue> <!-- requires expireTs -->
+    </enum>
+
+    <!-- What happened to the order (event) -->
+    <enum name="ExecType" encodingType="uint8">
+      <validValue name="PendingNew">0</validValue>     <!-- accepted by the connector, sent to the venue -->
+      <validValue name="New">1</validValue>            <!-- acknowledged by the venue -->
+      <validValue name="Rejected">2</validValue>       <!-- new order rejected, see reason/text -->
+      <validValue name="PendingCancel">3</validValue>
+      <validValue name="Canceled">4</validValue>
+      <validValue name="PendingReplace">5</validValue>
+      <validValue name="Replaced">6</validValue>
+      <validValue name="Trade">7</validValue>          <!-- fill or partial fill, see lastQty/lastPx -->
+      <validValue name="Expired">8</validValue>
+      <validValue name="Status">9</validValue>         <!-- response to OrderStatusRequest, no state change -->
+    </enum>
+
+    <!-- Current state of the order after the event -->
+    <enum name="OrderStatus" encodingType="uint8">
+      <validValue name="PendingNew">0</validValue>
+      <validValue name="New">1</validValue>
+      <validValue name="PartiallyFilled">2</validValue>
+      <validValue name="Filled">3</validValue>
+      <validValue name="PendingCancel">4</validValue>
+      <validValue name="PendingReplace">5</validValue>
+      <validValue name="Canceled">6</validValue>
+      <validValue name="Rejected">7</validValue>
+      <validValue name="Expired">8</validValue>
+    </enum>
+
+    <enum name="ResultCode" encodingType="uint8">
+      <validValue name="Ok">0</validValue>
+      <validValue name="InvalidRequest">1</validValue>
+      <validValue name="UnknownInstrument">2</validValue>
+      <validValue name="UnknownContext">3</validValue>
+      <validValue name="UnknownOrder">4</validValue>
+      <validValue name="DuplicateOrderRef">5</validValue>
+      <validValue name="NotAllowed">6</validValue>   <!-- e.g. client code or account not permitted -->
+      <validValue name="NotConnected">7</validValue> <!-- connector has no session with the venue -->
+      <validValue name="Rejected">8</validValue>     <!-- rejected by the venue, see text -->
+    </enum>
+
+    <set name="OrderFlags" encodingType="uint16">
+      <choice name="PostOnly">0</choice>
+      <choice name="ReduceOnly">1</choice>
+      <!-- bits 2..15 are reserved -->
+    </set>
+  </types>
+
+  <!-- ================= Client -> connector (MPSC queue): contexts ================= -->
+
+  <!-- Creates a context bound to one instrument. Response: ContextResult
+       matched by (clientId, requestId). -->
+  <sbe:message name="CreateContext" id="10">
+    <field name="clientId"     id="1" type="ClientId"/>
+    <field name="requestId"    id="2" type="uint64"/>
+    <field name="instrumentId" id="3" type="InstrumentId"/>
+    <data  name="clientCode"   id="4" type="varStringEncoding"/>
+    <data  name="account"      id="5" type="varStringEncoding"/> <!-- empty = connector default -->
+  </sbe:message>
+
+  <!-- Template id 11 is intentionally unused: there is no CloseContext, contexts
+       live until the connector restarts. Do not reuse the id. -->
+
+  <!-- ================= Client -> connector (MPSC queue): orders ================= -->
+
+  <!-- Response: ExecutionReport (PendingNew/New/Rejected/...) with the same orderRef. -->
+  <sbe:message name="NewOrder" id="20">
+    <field name="contextId"   id="1"  type="ContextId"/>
+    <field name="requestId"   id="2"  type="uint64"/>
+    <field name="orderRef"    id="3"  type="OrderRef"/>
+    <field name="side"        id="4"  type="OrderSide"/>
+    <field name="orderType"   id="5"  type="OrderType"/>
+    <field name="timeInForce" id="6"  type="TimeInForce"/>
+    <field name="price"       id="7"  type="PriceNULL"     presence="optional"/> <!-- null for Market/StopMarket -->
+    <field name="stopPrice"   id="8"  type="PriceNULL"     presence="optional"/> <!-- null for Limit/Market -->
+    <field name="qty"         id="9"  type="Qty"/>
+    <field name="displayQty"  id="10" type="QtyNULL"       presence="optional"/> <!-- iceberg, null = fully displayed -->
+    <field name="expireTs"    id="11" type="TimestampNULL" presence="optional"/> <!-- Gtd only -->
+    <field name="flags"       id="12" type="OrderFlags"/>
+  </sbe:message>
+
+  <!-- Null field = keep the current value.
+       Response: ExecutionReport (PendingReplace/Replaced) or CommandReject. -->
+  <sbe:message name="ReplaceOrder" id="21">
+    <field name="contextId"  id="1" type="ContextId"/>
+    <field name="requestId"  id="2" type="uint64"/>
+    <field name="orderRef"   id="3" type="OrderRef"/>
+    <field name="price"      id="4" type="PriceNULL" presence="optional"/>
+    <field name="stopPrice"  id="5" type="PriceNULL" presence="optional"/>
+    <field name="qty"        id="6" type="QtyNULL"   presence="optional"/>
+  </sbe:message>
+
+  <!-- Response: ExecutionReport (PendingCancel/Canceled) or CommandReject. -->
+  <sbe:message name="CancelOrder" id="22">
+    <field name="contextId"  id="1" type="ContextId"/>
+    <field name="requestId"  id="2" type="uint64"/>
+    <field name="orderRef"   id="3" type="OrderRef"/>
+  </sbe:message>
+
+  <!-- Cancels all open orders of the context. side = null: both sides.
+       Response: one ExecutionReport per canceled order, or CommandReject. -->
+  <sbe:message name="CancelAll" id="23">
+    <field name="contextId"  id="1" type="ContextId"/>
+    <field name="requestId"  id="2" type="uint64"/>
+    <field name="side"       id="3" type="OrderSide" presence="optional"/>
+  </sbe:message>
+
+  <!-- Current state of orders, used by a client after restart.
+       orderRef = null: all open orders of the context.
+       Response: ExecutionReport(execType = Status) per order, then RequestComplete,
+       or CommandReject. -->
+  <sbe:message name="OrderStatusRequest" id="24">
+    <field name="contextId"  id="1" type="ContextId"/>
+    <field name="requestId"  id="2" type="uint64"/>
+    <field name="orderRef"   id="3" type="UInt64NULL" presence="optional"/>
+  </sbe:message>
+
+  <!-- ================= Connector -> clients (multicast queue) ================= -->
+
+  <!-- Response to CreateContext: clientId and requestId are echoed,
+       contextId is set on success. -->
+  <sbe:message name="ContextResult" id="12">
+    <field name="clientId"   id="1" type="ClientId"/>
+    <field name="requestId"  id="2" type="uint64"/>
+    <field name="contextId"  id="3" type="ContextIdNULL" presence="optional"/> <!-- null if CreateContext failed -->
+    <field name="result"     id="4" type="ResultCode"/>
+    <data  name="text"       id="5" type="varStringEncoding"/>
+  </sbe:message>
+
+  <!-- Any change of an order, a fill, or a status snapshot.
+       requestId = 0: unsolicited (fill, exchange-side cancel, expiry).
+       price: current working price, null for market orders.
+       lastQty, lastPx, tradeId are set only for execType = Trade.
+       reason is Ok unless execType = Rejected.
+       instrumentId is the context's instrument; it lets third-party services that
+       do not know the context identify the instrument from the report alone. -->
+  <sbe:message name="ExecutionReport" id="30">
+    <field name="contextId"       id="1"  type="ContextId"/>
+    <field name="instrumentId"    id="2"  type="InstrumentId"/>
+    <field name="requestId"       id="3"  type="uint64"/>
+    <field name="orderRef"        id="4"  type="OrderRef"/>
+    <field name="execType"        id="5"  type="ExecType"/>
+    <field name="orderStatus"     id="6"  type="OrderStatus"/>
+    <field name="side"            id="7"  type="OrderSide"/>
+    <field name="price"           id="8"  type="PriceNULL"     presence="optional"/>
+    <field name="orderQty"        id="9"  type="Qty"/>
+    <field name="leavesQty"       id="10" type="Qty"/>
+    <field name="cumQty"          id="11" type="Qty"/>
+    <field name="lastQty"         id="12" type="QtyNULL"       presence="optional"/>
+    <field name="lastPx"          id="13" type="PriceNULL"     presence="optional"/>
+    <field name="tradeId"         id="14" type="UInt64NULL"    presence="optional"/>
+    <field name="exchangeOrderId" id="15" type="UInt64NULL"    presence="optional"/>
+    <field name="reason"          id="16" type="ResultCode"/>
+    <field name="transactTs"      id="17" type="TimestampNULL" presence="optional"/> <!-- venue event time -->
+    <field name="receiveTs"       id="18" type="Timestamp"/>                         <!-- connector receive time -->
+    <data  name="text"            id="19" type="varStringEncoding"/>
+  </sbe:message>
+
+  <!-- A command that did not change any order (replace/cancel/cancel-all/status
+       rejected). A rejected NewOrder is reported with ExecutionReport(Rejected). -->
+  <sbe:message name="CommandReject" id="31">
+    <field name="contextId"  id="1" type="ContextId"/>
+    <field name="requestId"  id="2" type="uint64"/>
+    <field name="orderRef"   id="3" type="UInt64NULL" presence="optional"/> <!-- null for CancelAll -->
+    <field name="reason"     id="4" type="ResultCode"/>
+    <field name="receiveTs"  id="5" type="Timestamp"/>
+    <data  name="text"       id="6" type="varStringEncoding"/>
+  </sbe:message>
+
+  <!-- Terminates the response to OrderStatusRequest.
+       count = number of ExecutionReport messages sent. -->
+  <sbe:message name="RequestComplete" id="32">
+    <field name="contextId"  id="1" type="ContextId"/>
+    <field name="requestId"  id="2" type="uint64"/>
+    <field name="result"     id="3" type="ResultCode"/>
+    <field name="count"      id="4" type="uint32"/>
+  </sbe:message>
+</sbe:messageSchema>

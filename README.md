@@ -14,9 +14,11 @@
 | Path | What lives there |
 |---|---|
 | `code/turbofw/` | Core library `turbofw::turbofw` (`*.h`, `*.cpp`), unit tests (`*_test.cpp`), benchmarks (`*_bm.cpp`) |
-| `schemas/md.xml` | SBE market data schema (id 1): instruments, trading status, MBO, MBP, trades, statistics → `<turbofw/md/schema.h>`, `turbofw::md` |
-| `schemas/trading.xml` | SBE trading schema (id 2): new / replace / cancel / mass cancel, execution reports, cancel rejects, session status → `<turbofw/trading/schema.h>`, `turbofw::trading` |
-| `schemas/common.xml` | Types shared by both schemas (message header, Price, Qty, Timestamp, Side, and their optional NULL variants: PriceNULL, QtyNULL, TimestampNULL), XIncluded into each |
+| `schemas/market_data_schema.xml` | SBE market data schema (package `md`, schemaId 1): MBP/MBO updates, trades, statistics, instrument status, snapshots, snapshot requests → `<turbofw/md/schema.h>`, namespace `md` |
+| `schemas/metadata_schema.xml` | SBE metadata schema (package `meta`, schemaId 2): instrument definitions, metadata service registration and requests → `<turbofw/meta/schema.h>`, namespace `meta` |
+| `schemas/trading_schema.xml` | SBE trading schema (package `trd`, schemaId 3): contexts, new/replace/cancel orders and status, execution reports, command rejects → `<turbofw/trd/schema.h>`, namespace `trd` |
+| `schemas/service_schema.xml` | SBE service schema (package `svc`, schemaId 4): heartbeats and runtime log level, shared by every service → `<turbofw/svc/schema.h>`, namespace `svc` |
+| `schemas/common_types.xml` | Types shared by all schemas (message header, group size, InstrumentId, ClientId, Price, Qty, Timestamp, their NULL variants and RequestStatus), XIncluded into each |
 | `cmake/` | `GetCPM.cmake` (dependency bootstrap, same as in turboq) |
 
 ## Dependencies

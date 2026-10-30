@@ -1,0 +1,171 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sbe:messageSchema xmlns:sbe="http://fixprotocol.io/2016/sbe"
+                   xmlns:xi="http://www.w3.org/2001/XInclude"
+                   package="md" id="1" version="0" semanticVersion="0.1"
+                   byteOrder="littleEndian" description="Market data">
+
+  <!-- messageHeader, groupSizeEncoding, varStringEncoding, InstrumentId, Timestamp,
+       Price, Qty, *NULL types, RequestStatus -->
+  <xi:include href="common_types.xml"/>
+
+  <types>
+    <!-- ===== Flags ===== -->
+    <set name="MdFlags" encodingType="uint16">
+      <!-- Last message of an exchange event; the state is consistent after it -->
+      <choice name="EndOfEvent">0</choice>
+      <!-- Message is part of a snapshot -->
+      <choice name="Snapshot">1</choice>
+      <!-- Snapshot must not be ignored: reset the instrument state and accept
+           the snapshot (e.g. after recovery) -->
+      <choice name="Mandatory">2</choice>
+      <!-- Not live data: retransmission / replay -->
+      <choice name="Replay">3</choice>
+      <!-- Upstream data loss, instrument state is not trustworthy -->
+      <choice name="Gap">4</choice>
+      <!-- bits 5..15 are reserved -->
+    </set>
+
+    <!-- Common header of every market data message.
+         Messages are matched by instrumentId. -->
+    <composite name="MdHeader">
+      <ref name="instrumentId" type="InstrumentId"/>
+      <ref name="exchangeTs"   type="TimestampNULL"/> <!-- null if the venue does not provide event time -->
+      <ref name="receiveTs"    type="Timestamp"/>
+      <ref name="flags"        type="MdFlags"/>
+    </composite>
+
+    <!-- ===== Enums ===== -->
+    <enum name="Side" encodingType="uint8">
+      <validValue name="Bid">0</validValue>
+      <validValue name="Ask">1</validValue>
+    </enum>
+    <enum name="UpdateAction" encodingType="uint8">
+      <validValue name="New">0</validValue>
+      <validValue name="Change">1</validValue>
+      <validValue name="Delete">2</validValue>
+      <validValue name="Clear">3</validValue> <!-- book reset -->
+    </enum>
+    <enum name="StatType" encodingType="uint8">
+      <validValue name="Open">0</validValue>
+      <validValue name="High">1</validValue>
+      <validValue name="Low">2</validValue>
+      <validValue name="Close">3</validValue>
+      <validValue name="Settlement">4</validValue>
+      <validValue name="Volume">5</validValue>
+      <validValue name="OpenInterest">6</validValue>
+      <validValue name="Vwap">7</validValue>
+    </enum>
+  </types>
+
+  <!-- ================= Streaming data ================= -->
+
+  <!-- Market by price update.
+       For Clear: price, qty = null. -->
+  <sbe:message name="MbpUpdate" id="10">
+    <field name="header" id="1" type="MdHeader"/>
+    <field name="side"   id="2" type="Side"/>
+    <field name="action" id="3" type="UpdateAction"/>
+    <field name="level"  id="4" type="uint8"/>
+    <field name="price"  id="5" type="PriceNULL"  presence="optional"/>
+    <field name="qty"    id="6" type="QtyNULL"    presence="optional"/>
+    <field name="orders" id="7" type="UInt32NULL" presence="optional"/>
+  </sbe:message>
+
+  <!-- Market by order update.
+       Clear:  orderId, price, qty = null.
+       New:    price/qty of the new order.
+       Delete: price/qty of the order being removed.
+       Change: new price/qty plus prevPrice/prevQty, so the aggregated level
+               can be adjusted even if the order was created before the snapshot. -->
+  <sbe:message name="MboUpdate" id="11">
+    <field name="header"    id="1" type="MdHeader"/>
+    <field name="orderId"   id="2" type="UInt64NULL" presence="optional"/>
+    <field name="side"      id="3" type="Side"/>
+    <field name="action"    id="4" type="UpdateAction"/>
+    <field name="price"     id="5" type="PriceNULL"  presence="optional"/>
+    <field name="qty"       id="6" type="QtyNULL"    presence="optional"/>
+    <field name="prevPrice" id="7" type="PriceNULL"  presence="optional"/> <!-- Change only -->
+    <field name="prevQty"   id="8" type="QtyNULL"    presence="optional"/> <!-- Change only -->
+    <field name="priority"  id="9" type="UInt64NULL" presence="optional"/>
+  </sbe:message>
+
+  <sbe:message name="Trade" id="12">
+    <field name="header"     id="1" type="MdHeader"/>
+    <field name="tradeId"    id="2" type="UInt64NULL" presence="optional"/>
+    <field name="price"      id="3" type="Price"/>
+    <field name="qty"        id="4" type="Qty"/>
+    <field name="aggressor"  id="5" type="Side" presence="optional"/> <!-- null = unknown -->
+    <field name="conditions" id="6" type="uint32"/>
+  </sbe:message>
+
+  <!-- Exactly one of price/qty is populated: price-like types (Open, High, Low,
+       Close, Settlement, Vwap) go to price, volume-like types (Volume,
+       OpenInterest) go to qty. -->
+  <sbe:message name="Statistic" id="13">
+    <field name="header" id="1" type="MdHeader"/>
+    <field name="type"   id="2" type="StatType"/>
+    <field name="price"  id="3" type="PriceNULL" presence="optional"/>
+    <field name="qty"    id="4" type="QtyNULL"   presence="optional"/>
+  </sbe:message>
+
+  <sbe:message name="InstrumentStatus" id="14">
+    <field name="header"       id="1" type="MdHeader"/>
+    <field name="tradingState" id="2" type="uint8"/>
+  </sbe:message>
+
+  <!-- ================= Snapshot ================= -->
+  <!-- State of a single instrument: aggregated price levels, statistics and
+       trading state. All subsequent increments for this instrument are
+       consistent with the snapshot (guaranteed by the connector).
+       header.flags: Snapshot is always set; Mandatory is set for spontaneous
+       (recovery) snapshots.
+       Response to SnapshotRequest: clientId and requestId are copied from the request.
+       Spontaneous snapshot: clientId = null, requestId = 0.
+       tradingState and stats are meaningful only in chunk 0; stats is empty in
+       the remaining chunks. -->
+  <sbe:message name="Snapshot" id="20">
+    <field name="header"       id="1" type="MdHeader"/>
+    <field name="clientId"     id="2" type="ClientIdNULL" presence="optional"/>
+    <field name="requestId"    id="3" type="uint64"/>
+    <field name="chunkNo"      id="4" type="uint16"/>
+    <field name="lastChunk"    id="5" type="uint8"/>   <!-- 1 = last chunk -->
+    <field name="tradingState" id="6" type="uint8"/>
+    <group name="bids" id="7" dimensionType="groupSizeEncoding"> <!-- descending price -->
+      <field name="price"  id="1" type="Price"/>
+      <field name="qty"    id="2" type="Qty"/>
+      <field name="orders" id="3" type="UInt32NULL" presence="optional"/>
+    </group>
+    <group name="asks" id="8" dimensionType="groupSizeEncoding"> <!-- ascending price -->
+      <field name="price"  id="1" type="Price"/>
+      <field name="qty"    id="2" type="Qty"/>
+      <field name="orders" id="3" type="UInt32NULL" presence="optional"/>
+    </group>
+    <group name="stats" id="9" dimensionType="groupSizeEncoding">
+      <field name="type"       id="1" type="StatType"/>
+      <field name="price"      id="2" type="PriceNULL"     presence="optional"/>
+      <field name="qty"        id="3" type="QtyNULL"       presence="optional"/>
+      <field name="exchangeTs" id="4" type="TimestampNULL" presence="optional"/>
+    </group>
+  </sbe:message>
+
+  <!-- ================= Requests / responses ================= -->
+  <!-- Template ids 31 and 32 (instrument definitions) were moved to the meta schema
+       and must not be reused. -->
+
+  <!-- Response: Snapshot chunk(s) followed by RequestComplete. -->
+  <sbe:message name="SnapshotRequest" id="30">
+    <field name="clientId"     id="1" type="ClientId"/>
+    <field name="requestId"    id="2" type="uint64"/>
+    <field name="instrumentId" id="3" type="InstrumentId"/>
+    <field name="depth"        id="4" type="uint16"/> <!-- 0 = full book, otherwise top-N levels per side -->
+  </sbe:message>
+
+  <!-- Terminates any request. count = number of response messages sent
+       (for SnapshotRequest this is the number of chunks). -->
+  <sbe:message name="RequestComplete" id="33">
+    <field name="clientId"  id="1" type="ClientId"/>
+    <field name="requestId" id="2" type="uint64"/>
+    <field name="status"    id="3" type="RequestStatus"/>
+    <field name="count"     id="4" type="uint32"/>
+  </sbe:message>
+</sbe:messageSchema>
