@@ -19,12 +19,8 @@ if (turbofw_BUILD_BENCHMARKS)
         NAME benchmark
         GITHUB_REPOSITORY google/benchmark
         VERSION 1.10.0
-        OPTIONS
-            "BENCHMARK_ENABLE_TESTING OFF"
-            "BENCHMARK_ENABLE_GTEST_TESTS OFF"
-            "BENCHMARK_ENABLE_INSTALL OFF"
-            "BENCHMARK_INSTALL_DOCS OFF"
-            "BENCHMARK_ENABLE_WERROR OFF")
+        OPTIONS "BENCHMARK_ENABLE_TESTING OFF"
+    )
 endif()
 
 # ksergey/* libraries, in dependency order
