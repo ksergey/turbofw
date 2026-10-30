@@ -15,7 +15,16 @@ CPMAddPackage("gh:fmtlib/fmt#12.2.0")
 CPMAddPackage("gh:jarro2783/cxxopts@3.3.1")
 
 if (turbofw_BUILD_BENCHMARKS)
-    CPMAddPackage("gh:google/benchmark@1.10.0")
+    CPMAddPackage(
+        NAME benchmark
+        GITHUB_REPOSITORY google/benchmark
+        VERSION 1.10.0
+        OPTIONS
+            "BENCHMARK_ENABLE_TESTING OFF"
+            "BENCHMARK_ENABLE_GTEST_TESTS OFF"
+            "BENCHMARK_ENABLE_INSTALL OFF"
+            "BENCHMARK_INSTALL_DOCS OFF"
+            "BENCHMARK_ENABLE_WERROR OFF")
 endif()
 
 # ksergey/* libraries, in dependency order
