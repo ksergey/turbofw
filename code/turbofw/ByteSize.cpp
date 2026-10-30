@@ -7,6 +7,8 @@
 #include <cctype>
 #include <charconv>
 
+#include <fmt/format.h>
+
 namespace turbofw {
 
 auto ByteSize::fromString(std::string_view literal) -> std::expected<ByteSize, std::string> {
@@ -21,13 +23,13 @@ auto ByteSize::fromString(std::string_view literal) -> std::expected<ByteSize, s
     // longest suffix first to prevent "100MiB" to be parsed as number+"B"
     struct Unit {
         std::string_view suffix;
-        std::uint64_t multiplier;
+        std::size_t multiplier;
     };
     static constexpr Unit units[] = {
-        {"TiB", std::uint64_t{1} << 40},
-        {"GiB", std::uint64_t{1} << 30},
-        {"MiB", std::uint64_t{1} << 20},
-        {"KiB", std::uint64_t{1} << 10},
+        {"TiB", std::size_t{1} << 40},
+        {"GiB", std::size_t{1} << 30},
+        {"MiB", std::size_t{1} << 20},
+        {"KiB", std::size_t{1} << 10},
         {"B", 1},
         {"", 1},
     };
@@ -37,14 +39,14 @@ auto ByteSize::fromString(std::string_view literal) -> std::expected<ByteSize, s
             continue;
         }
         auto const digits = literal.substr(0, literal.size() - unit.suffix.size());
-        std::uint64_t number = 0;
+        std::size_t number = 0;
         auto const [ptr, ec] = std::from_chars(digits.data(), digits.data() + digits.size(), number);
         if (ec != std::errc{} || ptr != digits.data() + digits.size()) {
             continue;
         }
         return ByteSize{number * unit.multiplier};
     }
-    return std::unexpected{std::string{"invalid size literal \""} + std::string{literal} + "\""};
+    return std::unexpected{fmt::format("invalid size literal \"{}\"", literal)};
 }
 
 } // namespace turbofw
