@@ -21,7 +21,7 @@
 #include <turboq/MulticastMessageQueue.h>
 #include <turboq/SPSCMessageQueue.h>
 
-#include "config/ByteSize.h"
+#include "ByteSize.h"
 #include "config/ExpandVars.h"
 #include "config/Json.h"
 
@@ -37,9 +37,9 @@ public:
     struct QueueConfig {
         std::string name;
         std::string type;
-        std::optional<config::ByteSize> capacity;
+        std::optional<ByteSize> capacity;
         std::optional<std::uint64_t> length;
-        std::optional<config::ByteSize> slotSize;
+        std::optional<ByteSize> slotSize;
 
         template <typename DTO>
         void serialize(DTO& dto) {

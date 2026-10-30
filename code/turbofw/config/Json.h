@@ -17,6 +17,8 @@
 #include <fmt/format.h>
 #include <nlohmann/json.hpp>
 
+#include <turbofw/ByteSize.h>
+
 #include "Exception.h"
 #include "ValueBinder.h"
 
@@ -269,6 +271,29 @@ struct JsonMapping<std::chrono::duration<Rep, Period>> {
     }
     static void write(nlohmann::json& json, std::chrono::duration<Rep, Period> const& value) {
         JsonMapping<Rep>::write(json, value.count());
+    }
+};
+
+/// Mapping for ByteSize: unsigned number or string literal
+template <>
+struct JsonMapping<ByteSize> {
+    static void read(nlohmann::json const& json, ByteSize& value) {
+        if (json.is_number_unsigned()) {
+            value = ByteSize{json.get<std::uint64_t>()};
+            return;
+        }
+        if (json.is_string()) {
+            auto const parsed = ByteSize::fromString(json.get<std::string>());
+            if (!parsed) {
+                throw Exception{parsed.error()};
+            }
+            value = *parsed;
+            return;
+        }
+        throw Exception{"expected size literal (number or string like \"1MiB\")"};
+    }
+    static void write(nlohmann::json& json, ByteSize value) {
+        json = value.bytes;
     }
 };
 
