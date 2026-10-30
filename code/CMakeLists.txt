@@ -38,8 +38,8 @@ target_compile_options(${TargetName}
 target_include_directories(${TargetName}
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(${TargetName}
-    PUBLIC turboq::turboq turboq::reactor ${TargetName}::md-sbe ${TargetName}::meta-sbe ${TargetName}::trd-sbe
-        ${TargetName}::svc-sbe)
+    PUBLIC turboq::turboq turboq::reactor nlohmann_json::nlohmann_json fmt::fmt ${TargetName}::md-sbe
+        ${TargetName}::meta-sbe ${TargetName}::trd-sbe ${TargetName}::svc-sbe)
 
 if (turbofw_SANITIZER AND turbofw_TSAN)
     message(FATAL_ERROR "turbofw_SANITIZER (ASan/UBSan/LeakSanitizer) and turbofw_TSAN (ThreadSanitizer) "
