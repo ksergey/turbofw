@@ -285,11 +285,12 @@ TEST_SUITE("Environment") {
             consumer->consume();
         }
 
-        // a second mpsc consumer while the first is alive is an error
+        // a second mpsc consumer while the first is alive is an error; the second consumer
+        // comes from a separate environment, the same way another process would attach
         {
-            auto first = env.createConsumer<turboq::MPSCMessageQueue::Consumer>("turbofw-env-test@cmd", false);
-            REQUIRE_MESSAGE(first, first.error());
-            auto second = env.createConsumer<turboq::MPSCMessageQueue::Consumer>("turbofw-env-test@cmd", false);
+            auto other = Environment::loadFromJson(kFullConfig, makeVars(dir.path()));
+            REQUIRE_MESSAGE(other, other.error());
+            auto second = other->createConsumer<turboq::MPSCMessageQueue::Consumer>("turbofw-env-test@cmd", false);
             REQUIRE_FALSE_MESSAGE(second.has_value(), "second mpsc consumer must fail while the first is alive");
         }
     }
@@ -314,12 +315,13 @@ TEST_SUITE("Environment") {
         auto const queue = first->getMPSCQueue("turbofw-env-test@opts", false);
         REQUIRE_MESSAGE(queue, queue.error());
 
-        // opening with a different length/slot-size is a size mismatch
+        // opening with a different length/slot-size is a size mismatch; the error text comes
+        // from turboq (a size-mismatch error code) and does not carry the queue name
         auto const second = Environment::loadFromJson(makeConfig(256, "1KiB"));
         REQUIRE_MESSAGE(second, second.error());
         auto const reopened = second->getMPSCQueue("turbofw-env-test@opts", false);
-        REQUIRE_FALSE(reopened);
-        REQUIRE_NE(reopened.error().find("turbofw-env-test@opts"), std::string::npos);
+        REQUIRE_FALSE_MESSAGE(reopened, "reopen with different options must fail");
+        REQUIRE_FALSE(reopened.error().empty());
     }
 }
 

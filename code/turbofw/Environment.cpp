@@ -255,65 +255,158 @@ auto Environment::loadFromConfig(
     return load(config, std::move(vars));
 }
 
+auto Environment::getMulticastQueueCached(
+    std::string_view name, bool openOnly, std::string& error) const -> turboq::MulticastMessageQueue* {
+    try {
+        auto const found = std::ranges::find_if(queues_, [&](auto const& entry) {
+            return entry.name == name;
+        });
+        if (found == queues_.end()) {
+            error = fmt::format("unknown queue \"{}\"", name);
+            return nullptr;
+        }
+        if (found->type != QueueEntryType::Multicast) {
+            error = fmt::format("queue \"{}\" is not multicast queue", name);
+            return nullptr;
+        }
+
+        auto& entry = openQueues_[std::string{name}];
+        if (entry.multicast.has_value()) {
+            return &*entry.multicast;
+        }
+        auto queue = (openOnly ? turboq::MulticastMessageQueue::makeQueue(name)
+                          : turboq::MulticastMessageQueue::makeQueue(
+                                name, turboq::MulticastMessageQueue::CreationOptions{
+                                          .capacityHint = *found->capacity}))
+                         .transform_error([](std::error_code const& ec) {
+                             return ec.message();
+                         });
+        if (!queue) {
+            error = std::move(queue).error();
+            return nullptr;
+        }
+        entry = OpenQueue{};
+        entry.multicast.emplace(std::move(*queue));
+        return &*entry.multicast;
+    } catch (std::exception const& e) {
+        error = e.what();
+        return nullptr;
+    }
+}
+
+auto Environment::getMPSCQueueCached(
+    std::string_view name, bool openOnly, std::string& error) const -> turboq::MPSCMessageQueue* {
+    try {
+        auto const found = std::ranges::find_if(queues_, [&](auto const& entry) {
+            return entry.name == name;
+        });
+        if (found == queues_.end()) {
+            error = fmt::format("unknown queue \"{}\"", name);
+            return nullptr;
+        }
+        if (found->type != QueueEntryType::MPSC) {
+            error = fmt::format("queue \"{}\" is not mpsc queue", name);
+            return nullptr;
+        }
+
+        auto& entry = openQueues_[std::string{name}];
+        if (entry.mpsc.has_value()) {
+            return &*entry.mpsc;
+        }
+        auto queue = (openOnly ? turboq::MPSCMessageQueue::makeQueue(name)
+                          : turboq::MPSCMessageQueue::makeQueue(
+                                name, turboq::MPSCMessageQueue::CreationOptions{
+                                          .slotSizeHint = *found->slotSize,
+                                          .lengthHint = *found->length}))
+                         .transform_error([](std::error_code const& ec) {
+                             return ec.message();
+                         });
+        if (!queue) {
+            error = std::move(queue).error();
+            return nullptr;
+        }
+        entry = OpenQueue{};
+        entry.mpsc.emplace(std::move(*queue));
+        return &*entry.mpsc;
+    } catch (std::exception const& e) {
+        error = e.what();
+        return nullptr;
+    }
+}
+
+auto Environment::getSPSCQueueCached(
+    std::string_view name, bool openOnly, std::string& error) const -> turboq::SPSCMessageQueue* {
+    try {
+        auto const found = std::ranges::find_if(queues_, [&](auto const& entry) {
+            return entry.name == name;
+        });
+        if (found == queues_.end()) {
+            error = fmt::format("unknown queue \"{}\"", name);
+            return nullptr;
+        }
+        if (found->type != QueueEntryType::SPSC) {
+            error = fmt::format("queue \"{}\" is not spsc queue", name);
+            return nullptr;
+        }
+
+        auto& entry = openQueues_[std::string{name}];
+        if (entry.spsc.has_value()) {
+            return &*entry.spsc;
+        }
+        auto queue = (openOnly ? turboq::SPSCMessageQueue::makeQueue(name)
+                          : turboq::SPSCMessageQueue::makeQueue(
+                                name, turboq::SPSCMessageQueue::CreationOptions{
+                                          .capacityHint = *found->capacity}))
+                         .transform_error([](std::error_code const& ec) {
+                             return ec.message();
+                         });
+        if (!queue) {
+            error = std::move(queue).error();
+            return nullptr;
+        }
+        entry = OpenQueue{};
+        entry.spsc.emplace(std::move(*queue));
+        return &*entry.spsc;
+    } catch (std::exception const& e) {
+        error = e.what();
+        return nullptr;
+    }
+}
+
 auto Environment::getMulticastQueue(
     std::string_view name, bool openOnly) const noexcept -> std::expected<turboq::MulticastMessageQueue, std::string> {
-    auto const found = std::ranges::find_if(queues_, [&](auto const& entry) {
-        return entry.name == name;
+    auto error = std::string{};
+    if (this->getMulticastQueueCached(name, openOnly, error) == nullptr) {
+        return std::unexpected{std::move(error)};
+    }
+    // The environment keeps the queue itself open (with the file locks); return an independent handle
+    return turboq::MulticastMessageQueue::makeQueue(name).transform_error([](std::error_code const& ec) {
+        return ec.message();
     });
-    if (found == queues_.end()) {
-        return std::unexpected{fmt::format("unknown queue \"{}\"", name)};
-    }
-    auto const& entry = *found;
-    if (entry.type != QueueEntryType::Multicast) {
-        return std::unexpected{fmt::format("queue \"{}\" is not multicast queue", name)};
-    }
-    return (openOnly ? turboq::MulticastMessageQueue::makeQueue(entry.name)
-                     : turboq::MulticastMessageQueue::makeQueue(
-                           entry.name, turboq::MulticastMessageQueue::CreationOptions{.capacityHint = *entry.capacity}))
-        .transform_error([](std::error_code const& ec) {
-            return ec.message();
-        });
 }
 
 auto Environment::getMPSCQueue(
     std::string_view name, bool openOnly) const noexcept -> std::expected<turboq::MPSCMessageQueue, std::string> {
-    auto const found = std::ranges::find_if(queues_, [&](auto const& entry) {
-        return entry.name == name;
+    auto error = std::string{};
+    if (this->getMPSCQueueCached(name, openOnly, error) == nullptr) {
+        return std::unexpected{std::move(error)};
+    }
+    // The environment keeps the queue itself open (with the file locks); return an independent handle
+    return turboq::MPSCMessageQueue::makeQueue(name).transform_error([](std::error_code const& ec) {
+        return ec.message();
     });
-    if (found == queues_.end()) {
-        return std::unexpected{fmt::format("unknown queue \"{}\"", name)};
-    }
-    auto const& entry = *found;
-    if (entry.type != QueueEntryType::MPSC) {
-        return std::unexpected{fmt::format("queue \"{}\" is not mpsc queue", name)};
-    }
-    return (openOnly ? turboq::MPSCMessageQueue::makeQueue(entry.name)
-                     : turboq::MPSCMessageQueue::makeQueue(
-                           entry.name, turboq::MPSCMessageQueue::CreationOptions{.slotSizeHint = *entry.slotSize,
-                                           .lengthHint = *entry.length}))
-        .transform_error([](std::error_code const& ec) {
-            return ec.message();
-        });
 }
 
 auto Environment::getSPSCQueue(
     std::string_view name, bool openOnly) const noexcept -> std::expected<turboq::SPSCMessageQueue, std::string> {
-    auto const found = std::ranges::find_if(queues_, [&](auto const& entry) {
-        return entry.name == name;
+    auto error = std::string{};
+    if (this->getSPSCQueueCached(name, openOnly, error) == nullptr) {
+        return std::unexpected{std::move(error)};
+    }
+    // The environment keeps the queue itself open (with the file locks); return an independent handle
+    return turboq::SPSCMessageQueue::makeQueue(name).transform_error([](std::error_code const& ec) {
+        return ec.message();
     });
-    if (found == queues_.end()) {
-        return std::unexpected{fmt::format("unknown queue \"{}\"", name)};
-    }
-    auto const& entry = *found;
-    if (entry.type != QueueEntryType::SPSC) {
-        return std::unexpected{fmt::format("queue \"{}\" is not spsc queue", name)};
-    }
-    return (openOnly ? turboq::SPSCMessageQueue::makeQueue(entry.name)
-                     : turboq::SPSCMessageQueue::makeQueue(
-                           entry.name, turboq::SPSCMessageQueue::CreationOptions{.capacityHint = *entry.capacity}))
-        .transform_error([](std::error_code const& ec) {
-            return ec.message();
-        });
 }
 
 } // namespace turbofw
