@@ -52,15 +52,16 @@ private:
 public:
     using Vars = std::map<std::string, std::string, std::less<>>;
 
-    /// Load environment from json string
-    [[nodiscard]] static auto load(
-        detail::EnvironmentConfig const& config, Vars vars = {}) noexcept -> std::expected<Environment, std::string>;
-
-    /// Load environment from json string
+    /// Load environment from a json string in memory
+    /// vars are additional variables for ${VAR} expansion; process environment applies after them
+    /// (e.g. {"NAME", serviceName} since the service name is only known at startup)
     [[nodiscard]] static auto loadFromJson(
         std::string_view content, Vars vars = {}) noexcept -> std::expected<Environment, std::string>;
 
-    /// Load environment from json config file
+    /// Load environment from a json config file
+    /// vars are additional variables for ${VAR} expansion; process environment applies after them.
+    /// Scope expansion common: the expanded scope value becomes the ${SCOPE} variable for the rest of the config
+    /// (e.g. {"NAME", appName} since service name is only known at startup)
     [[nodiscard]] static auto loadFromConfig(
         std::filesystem::path const& configPath, Vars vars = {}) noexcept -> std::expected<Environment, std::string>;
 
@@ -94,6 +95,10 @@ public:
         return queues_;
     }
 
+    /// Open queue/producer/consumer by name; queue type comes from config,
+    /// wrong type request is an error.
+    /// @param openOnly when true, opens the queue only (fails if not created yet); otherwise opens-or-creates
+    ///                 with options from config
     [[nodiscard]] auto getMulticastQueue(std::string_view name,
         bool openOnly) const noexcept -> std::expected<turboq::MulticastMessageQueue, std::string>;
 
@@ -103,6 +108,11 @@ public:
     [[nodiscard]] auto getSPSCQueue(
         std::string_view name, bool openOnly) const noexcept -> std::expected<turboq::SPSCMessageQueue, std::string>;
 
+    /// Create a producer.
+    /// @tparam T is a type derived from the corresponding turboq producer type;
+    /// it must be constructible from the base producer instance (a thin wrapper of the tiny impl)
+    /// @param openOnly when true, opens the queue only (fails if not created yet); otherwise opens-or-creates
+    ///                 with options from config
     template <typename Producer>
         requires std::is_base_of_v<turboq::MulticastMessageQueue::Producer, Producer>
     [[nodiscard]] TURBOQ_FORCE_INLINE auto createProducer(
@@ -180,6 +190,11 @@ public:
             }
         });
     }
+
+private:
+    /// Build environment from parsed environment config, used by loadFromJson()/loadFromConfig()
+    [[nodiscard]] static auto load(
+        detail::EnvironmentConfig const& config, Vars vars) noexcept -> std::expected<Environment, std::string>;
 };
 
 } // namespace turbofw

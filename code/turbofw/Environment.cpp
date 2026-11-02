@@ -17,7 +17,7 @@ struct QueueEntryConfig {
     std::string name;
     std::string type;
     std::optional<config::ByteSize> capacity;
-    std::optional<config::ByteSize> length;
+    std::optional<std::uint64_t> length; ///< for mpsc, slot count (not bytes)
     std::optional<config::ByteSize> slotSize;
 
     template <typename DTO>
@@ -151,7 +151,7 @@ auto Environment::load(
                     .name = config.name,
                     .type = QueueEntryType::MPSC,
                     .capacity = std::nullopt,
-                    .length = config.length->bytes,
+                    .length = *config.length,
                     .slotSize = config.slotSize->bytes,
                 };
             } else if (config.type == "spsc") {
@@ -188,8 +188,9 @@ auto Environment::load(
                 fmt::format("\"scope\" \"{}\" must not be empty and may contain [A-Za-z0-9@._-] only", scope)};
         }
 
-        // Add ${SCOPE} variable
-        vars.emplace("SCOPE", config.scope);
+        // Make expanded scope available to the rest of the config as ${SCOPE};
+        // it wins over a user-provided "SCOPE" since config is the source of truth
+        vars.insert_or_assign("SCOPE", scope);
 
         auto env = Environment{};
 
@@ -212,9 +213,7 @@ auto Environment::load(
             if (expanded.empty()) {
                 throw std::runtime_error{"\"search-path\" entries must not be empty"};
             }
-            if (!std::filesystem::exists(expanded)) {
-                fmt::print(stderr, "\"search-path\" entry \"{}\" not exists\n", expanded.string());
-            }
+            // missing entries are fine: findFile() just skips them
             env.searchPath_.push_back(expanded);
         }
 
