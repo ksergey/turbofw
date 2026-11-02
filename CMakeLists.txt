@@ -6,6 +6,7 @@ option(turbofw_SANITIZER "Build with sanitizer" OFF)
 option(turbofw_TSAN "Build with ThreadSanitizer" OFF)
 option(turbofw_BUILD_TESTS "Build tests (*_test.cpp files, linked against doctest)" ON)
 option(turbofw_BUILD_BENCHMARKS "Build benchmarks (*_bm.cpp files, linked against google-benchmark)" ON)
+option(turbofw_BUILD_EXAMPLES "Build examples (examples/*.cpp, linked against the framework)" ON)
 
 include(cmake/GetCPM.cmake)
 
@@ -35,3 +36,7 @@ if (turbofw_BUILD_TESTS)
 endif()
 
 add_subdirectory(code)
+
+if (turbofw_BUILD_EXAMPLES)
+    add_subdirectory(examples)
+endif()
