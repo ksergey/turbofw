@@ -1,0 +1,12 @@
+{
+    // Sample environment config for the "heartbeat" example service.
+    // ${NAME} is passed from the command line; the expanded scope becomes ${SCOPE}
+    // for the rest of the config.
+    "scope": "${NAME}",
+    "queues": [
+        // everything the service publishes (heartbeats)
+        { "name": "heartbeat@events", "type": "multicast", "capacity": "64KiB" },
+        // requests from clients (HeartbeatRequest)
+        { "name": "heartbeat@cmd", "type": "mpsc", "length": 1024, "slot-size": "128B" }
+    ]
+}
