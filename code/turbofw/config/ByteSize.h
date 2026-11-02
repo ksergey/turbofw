@@ -7,7 +7,7 @@
 #include <string>
 #include <string_view>
 
-namespace turbofw {
+namespace turbofw::config {
 
 /// Byte size value, parsed from literals like "64B", "100KiB", "1GiB", "1TiB" or bare number (bytes)
 struct ByteSize {
@@ -16,7 +16,11 @@ struct ByteSize {
     /// Parse size literal, error message on failure
     [[nodiscard]] static auto fromString(std::string_view literal) -> std::expected<ByteSize, std::string>;
 
+    [[nodiscard]] operator std::size_t() const noexcept {
+        return bytes;
+    }
+
     [[nodiscard]] friend constexpr auto operator<=>(ByteSize lhs, ByteSize rhs) noexcept = default;
 };
 
-} // namespace turbofw
+} // namespace turbofw::config

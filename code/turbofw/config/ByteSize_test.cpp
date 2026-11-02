@@ -7,9 +7,9 @@
 #include <nlohmann/json.hpp>
 
 #include "ByteSize.h"
-#include "config/Json.h"
+#include "Json.h"
 
-namespace turbofw {
+namespace turbofw::config {
 
 TEST_SUITE("ByteSize") {
     TEST_CASE("parse units") {
@@ -59,10 +59,9 @@ TEST_SUITE("ByteSize") {
         REQUIRE_EQ(json.is_number_unsigned(), true);
         REQUIRE_EQ(json.get<std::uint64_t>(), 2048);
 
-        REQUIRE_THROWS_AS(
-            (void)turbofw::config::JsonMapping<ByteSize>::read(nlohmann::json::parse(R"("1MB")"), value),
+        REQUIRE_THROWS_AS((void)turbofw::config::JsonMapping<ByteSize>::read(nlohmann::json::parse(R"("1MB")"), value),
             turbofw::config::Exception);
     }
 }
 
-} // namespace turbofw
+} // namespace turbofw::config

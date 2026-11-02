@@ -19,7 +19,7 @@ struct Exception : std::runtime_error {
     virtual ~Exception() {}
 };
 
-struct ValidateError : Exception {
+struct ConfigError : Exception {
     using Exception::Exception;
 };
 

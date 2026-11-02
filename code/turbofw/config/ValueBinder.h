@@ -54,14 +54,20 @@ public:
 
     template <typename T2>
         requires std::convertible_to<T2, T>
-    [[nodiscard]] constexpr auto defaultValue(T2 value) && noexcept -> ValueBinder<Name, T, detail::Value<T2>, ValidatorT> {
+    [[nodiscard]] constexpr auto defaultValue(
+        T2 value) && noexcept -> ValueBinder<Name, T, detail::Value<T2>, ValidatorT> {
         return {valuePtr_, detail::Value<T2>{value}, std::move(validator_)};
+    }
+
+    /// Using default constructible T as default value
+    [[nodiscard]] constexpr auto defaultValue() && noexcept -> ValueBinder<Name, T, detail::Value<T>, ValidatorT> {
+        return {valuePtr_, detail::Value<T>{T{}}, std::move(validator_)};
     }
 
     template <typename ValidatorT2>
         requires Validator<ValidatorT2>
-    [[nodiscard]] constexpr auto validate(ValidatorT2 validator) && noexcept
-        -> ValueBinder<Name, T, DefaultValueT, ValidatorT2> {
+    [[nodiscard]] constexpr auto validate(
+        ValidatorT2 validator) && noexcept -> ValueBinder<Name, T, DefaultValueT, ValidatorT2> {
         return {valuePtr_, std::move(defaultValue_), std::move(validator)};
     }
 
@@ -74,7 +80,7 @@ public:
         if constexpr (requires { defaultValue_.value; }) {
             *valuePtr_ = defaultValue_.value;
         } else {
-            throw Exception{"no default value available for \"{}\"", this->name()};
+            throw ConfigError{"no default value available for \"{}\"", this->name()};
         }
     }
 
@@ -83,7 +89,7 @@ public:
     constexpr void validate() const {
         if constexpr (requires { validator_(*valuePtr_); }) {
             if (auto const result = validator_(*valuePtr_); !result) {
-                throw ValidateError{"value for \"{}\" not pass validation", this->name()};
+                throw ConfigError{"value for \"{}\" not pass validation", this->name()};
             }
         }
     }

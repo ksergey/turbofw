@@ -9,7 +9,7 @@
 
 #include <fmt/format.h>
 
-namespace turbofw {
+namespace turbofw::config {
 
 auto ByteSize::fromString(std::string_view literal) -> std::expected<ByteSize, std::string> {
     // trim spaces
@@ -49,4 +49,4 @@ auto ByteSize::fromString(std::string_view literal) -> std::expected<ByteSize, s
     return std::unexpected{fmt::format("invalid size literal \"{}\"", literal)};
 }
 
-} // namespace turbofw
+} // namespace turbofw::config

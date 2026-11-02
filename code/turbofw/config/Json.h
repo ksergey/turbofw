@@ -17,8 +17,7 @@
 #include <fmt/format.h>
 #include <nlohmann/json.hpp>
 
-#include <turbofw/ByteSize.h>
-
+#include "ByteSize.h"
 #include "Exception.h"
 #include "ValueBinder.h"
 
@@ -29,17 +28,18 @@ struct JsonMapping;
 
 /// Read config from json file
 template <typename T>
-[[nodiscard]] auto fromJsonFile(T& value, std::filesystem::path const& path) noexcept -> std::expected<void, std::string> {
+[[nodiscard]] auto fromJsonFile(
+    T& value, std::filesystem::path const& path) noexcept -> std::expected<void, std::string> {
     try {
         auto stream = std::ifstream{path};
         if (!stream) {
-            throw Exception{"can't open config file \"{}\"", path.string()};
+            throw ConfigError{"can't open config file \"{}\"", path.string()};
         }
         // ignore_comments: allow "//" comments in config files
         auto const json = nlohmann::json::parse(stream, nullptr, true, true);
         JsonMapping<T>::read(json, value);
     } catch (std::exception const& e) {
-        return std::unexpected(e.what());
+        return std::unexpected{e.what()};
     }
     return {};
 }
@@ -52,7 +52,7 @@ template <typename T>
         auto const json = nlohmann::json::parse(content, nullptr, true, true);
         JsonMapping<T>::read(json, value);
     } catch (std::exception const& e) {
-        return std::unexpected(e.what());
+        return std::unexpected{e.what()};
     }
     return {};
 }
@@ -65,7 +65,7 @@ template <typename T>
         JsonMapping<T>::write(json, value);
         return {json.dump(indent)};
     } catch (std::exception const& e) {
-        return std::unexpected(e.what());
+        return std::unexpected{e.what()};
     }
 }
 
@@ -120,7 +120,7 @@ public:
     void finish() const {
         for (auto const& [key, value] : json_.items()) {
             if (std::find(knownKeys_.begin(), knownKeys_.end(), key) == knownKeys_.end()) {
-                throw Exception{"unknown key \"{}\"", key};
+                throw ConfigError{"unknown key \"{}\"", key};
             }
         }
     }
@@ -285,12 +285,12 @@ struct JsonMapping<ByteSize> {
         if (json.is_string()) {
             auto const parsed = ByteSize::fromString(json.get<std::string>());
             if (!parsed) {
-                throw Exception{parsed.error()};
+                throw ConfigError{parsed.error()};
             }
             value = *parsed;
             return;
         }
-        throw Exception{"expected size literal (number or string like \"1MiB\")"};
+        throw ConfigError{"expected size literal (number or string like \"1MiB\")"};
     }
     static void write(nlohmann::json& json, ByteSize value) {
         json = value.bytes;
