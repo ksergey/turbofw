@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <cstddef>
 #include <list>
 #include <optional>
@@ -13,9 +14,19 @@
 
 namespace turbofw::testing {
 
+/// An in-memory message queue for unit tests of producers/consumers and their mixins.
+///
+/// concept-compatible with the real turboq queues, but with test-oriented semantics: queue state lives in the
+/// process, there is no shared memory, no file system access, no sizegeometric alignment and no multi-process rules.
+/// Not thread-safe and single-producer/single-consumer by convention (like every turboq queue).
+///
+/// The `maxSize` knob is the test-time replacement for queue capacity: `prepare()` returns an empty buffer once
+/// `maxSize` uncommitted-or-committed messages are queued, which is how the ENOBUFS path of send operations is
+/// exercised without real ring geometry.
 struct Queue {
     struct Buffer {
         std::vector<std::byte> data;
+        /// The size from the commit operation, when it was called with a size; committed spans never exceed it
         std::optional<std::size_t> commitedSize;
     };
 
@@ -23,6 +34,16 @@ struct Queue {
     std::size_t maxSize{std::size_t(-1)};
 };
 
+/// concept-compatible producer for \ref Queue: messages are prepared and committed like on a real queue
+///
+/// - `prepare(size)` appends a zeroed buffer of `size` bytes at the back of the queue, or an empty one when the
+///   queue already holds `maxSize` messages (the analog of a full ring);
+/// - `commit()` publishes that buffer with its full prepared size, `commit(size)` publishes at most `size` bytes
+///   of it;
+/// - spans previously handed out stay valid for the queue lifetime (`std::list` gives stable addresses).
+///
+/// It commits the most recently prepared buffer: interleaving prepare/commit calls from two producers would
+/// misbehave, but that is out of contract for a single-producer queue anyway.
 struct Producer {
     Queue* queue{nullptr};
 
@@ -63,6 +84,14 @@ struct Producer {
 
 static_assert(turboq::Producer<Producer>);
 
+/// concept-compatible consumer for \ref Queue: messages are fetched and consumed like on a real queue
+///
+/// - `fetch()` returns the committed span of the front message, or an empty one when the queue is empty;
+/// - `consume()` pops the front message;
+/// - `reset()` drops everything, useful for tests that start over mid-case.
+///
+/// The consumer never observes uncommitted buffers: fetch() returns the front buffer before it gets committed
+/// (constructs with the zeroed placeholder span).
 struct Consumer {
     Queue* queue{nullptr};
 
