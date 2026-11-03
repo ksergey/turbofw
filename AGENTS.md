@@ -159,6 +159,11 @@ C-style constructs:
 - **Time:** use `std::chrono` types (`std::chrono::nanoseconds`, `sys_time`) inside the code and convert from and to
   the SBE `Timestamp` (int64 nanoseconds since the Unix epoch) at the edges.
 - **Output:** `std::print` / `std::println` in tools, examples and tests; services log through turboq-logger.
+- **SBE message objects:** lightweight non-owning views (~40 bytes: a buffer span, an offset, a position cursor and
+  the acting block length/version) over queue memory. Pass them by value in functions and callbacks; neither
+  references nor `const` messages (the generated getters are non-const, a `const` message does not compile).
+  Writing fields through a copy mutates the underlying buffer -- that is how encoding works -- and advances only
+  that copy's position cursor, so a callback that needs the final encoded size must return the message copy.
 - **Resource management:** RAII and `std::unique_ptr` / values; no raw `new` / `delete`, no owning raw pointers, no
   C-style casts. No `std::function` on hot paths (it may allocate); use templates or plain callables.
 - **Library support:** the minimum compilers are GCC 14 and Clang 20, so check that a C++23 library feature is

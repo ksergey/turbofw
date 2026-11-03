@@ -116,7 +116,7 @@ TEST_SUITE("SbeSendMixin") {
 
         auto constexpr kStartTs = std::int64_t{111};
         auto constexpr kIntervalMs = std::uint32_t{500};
-        auto const sent = producer.send<svc::Heartbeat>([&](svc::Heartbeat& msg) {
+        auto const sent = producer.send<svc::Heartbeat>([&](svc::Heartbeat msg) {
             msg.get<"clientId">().value(17);
             msg.get<"requestId">().value(3);
             msg.get<"serviceId">().value(1);
@@ -152,7 +152,7 @@ TEST_SUITE("SbeSendMixin") {
 
         CHECK_EQ(consumer.receive(kNoOpReceive), 0);
 
-        auto const sent = producer.send<md::Snapshot>({2u, 1u, 1u}, [](md::Snapshot& msg) {
+        auto const sent = producer.send<md::Snapshot>({2u, 1u, 1u}, [](md::Snapshot msg) {
             auto header = msg.get<"header">();
             header.get<"instrumentId">().value(42);
             header.get<"flags">().value(md::MdFlags{}.snapshot(true).mandatory(true));
@@ -210,7 +210,7 @@ TEST_SUITE("SbeSendMixin") {
         auto constexpr kAccount = "SPOT-ACC";
         auto const sent = producer.send<trd::CreateContext>(
             {std::char_traits<char>::length(kClientCode), std::char_traits<char>::length(kAccount)},
-            [](trd::CreateContext& msg) {
+            [](trd::CreateContext msg) {
                 msg.get<"clientId">().value(17);
                 msg.get<"requestId">().value(3);
                 msg.get<"instrumentId">().value(42);

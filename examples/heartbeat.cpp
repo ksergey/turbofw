@@ -57,7 +57,7 @@ struct HeartbeatConsumer : public turboq::MPSCMessageQueue::Consumer, public tur
 auto publishHeartbeat(HeartbeatProducer& producer, svc::ServiceFlags flags,
     std::optional<std::pair<std::uint32_t, std::uint64_t>> request) -> bool {
     return producer
-        .send<svc::Heartbeat>([&](svc::Heartbeat& msg) {
+        .send<svc::Heartbeat>([&](svc::Heartbeat msg) {
             if (request) {
                 msg.get<"clientId">().value(request->first); // response: echoes the request's ids
                 msg.get<"requestId">().value(request->second);

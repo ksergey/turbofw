@@ -37,12 +37,12 @@ concept SbeMessageWithVars = requires { typename M::SizeHint; } && (std::tuple_s
 ///
 /// \code{.cpp}
 /// // no variable-size parts: no sizes argument
-/// producer.send<svc::Heartbeat>([](svc::Heartbeat& msg) {
+/// producer.send<svc::Heartbeat>([](svc::Heartbeat msg) {
 ///     msg.get<"startTs">().value(startTs);
 /// });
 ///
 /// // repeating groups / data fields: their sizes first, then the callback
-/// producer.send<md::Snapshot>(std::tuple{bids, asks, stats}, [](md::Snapshot& msg) {
+/// producer.send<md::Snapshot>(std::tuple{bids, asks, stats}, [](md::Snapshot msg) {
 ///     auto bids = msg.get<"bids">();
 ///     bids.reset(2);
 ///     ...
@@ -53,6 +53,10 @@ concept SbeMessageWithVars = requires { typename M::SizeHint; } && (std::tuple_s
 /// repeating group, a byte length per data field (see the generated `sbeComputeSize()`). Passing a hint smaller
 /// than what the callback actually encodes makes the encode throw: per the hot-path exception rule (see
 /// AGENTS.md), that is a fatal encoding bug, not a recoverable failure.
+///
+/// The callback receives the message by copy (see the SBE message objects rule in AGENTS.md): field and group
+/// writes through the copy mutate the underlying buffer exactly the same way, so the encoding result is not
+/// affected either way.
 ///
 /// If no buffer is available, returns `ENOBUFS` without touching the callback. Note that for an mpsc producer
 /// `prepare()` itself throws when the computed size exceeds the slot size -- don't catch that either, it is a
