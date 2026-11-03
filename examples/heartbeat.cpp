@@ -14,7 +14,6 @@
 /// Run as many instances as you like: the scope differs per config, so the queue names and
 /// working directories don't collide.
 
-#include <array>
 #include <chrono>
 #include <csignal>
 #include <cstdint>
@@ -27,6 +26,8 @@
 
 #include <turbofw/Clock.h>
 #include <turbofw/Environment.h>
+#include <turbofw/mixin/ReceiveMixin.h>
+#include <turbofw/mixin/SbeSendMixin.h>
 #include <turbofw/svc/schema.h>
 
 namespace {
@@ -39,30 +40,38 @@ extern "C" auto onStop(int) -> void {
 
 constexpr auto kIntervalMs = std::chrono::duration<std::uint32_t, std::milli>{500};
 
+/// Multicast producer composed with the SBE send mixin
+struct HeartbeatProducer : public turboq::MulticastMessageQueue::Producer, public turbofw::mixin::SbeSendMixin {
+    explicit HeartbeatProducer(turboq::MulticastMessageQueue::Producer producer) noexcept
+        : turboq::MulticastMessageQueue::Producer{std::move(producer)} {}
+};
+
+/// mpsc consumer composed with the receive mixin
+struct HeartbeatConsumer : public turboq::MPSCMessageQueue::Consumer, public turbofw::mixin::ReceiveMixin {
+    explicit HeartbeatConsumer(turboq::MPSCMessageQueue::Consumer consumer) noexcept
+        : turboq::MPSCMessageQueue::Consumer{std::move(consumer)} {}
+};
+
 /// Publish a heartbeat on the multicast queue.
 /// @param request responding to a HeartbeatRequest when set (echoes clientId/requestId), spontaneous otherwise
-auto publishHeartbeat(turboq::MulticastMessageQueue::Producer& producer, svc::ServiceFlags flags,
+auto publishHeartbeat(HeartbeatProducer& producer, svc::ServiceFlags flags,
     std::optional<std::pair<std::uint32_t, std::uint64_t>> request) -> bool {
-    auto buffer = producer.prepare(64);
-    if (buffer.empty()) [[unlikely]] {
-        return false;
-    }
-
-    auto msg = svc::Heartbeat::wrapAndApplyHeader(buffer);
-    if (request) {
-        msg.get<"clientId">().value(request->first); // response: echoes the request's ids
-        msg.get<"requestId">().value(request->second);
-    } else {
-        msg.get<"clientId">().reset(); // spontaneous heartbeat: no addressee
-        msg.get<"requestId">().value(0);
-    }
-    msg.get<"serviceId">().reset(); // no id: the example is not registered in Metadata
-    msg.get<"startTs">().value(turbofw::realtimeNanos());
-    msg.get<"ts">().value(turbofw::realtimeNanos());
-    msg.get<"intervalMs">().value(kIntervalMs.count());
-    msg.get<"flags">().value(flags);
-    producer.commit(8 + msg.encodedSize()); // encoded message header + body
-    return true;
+    return producer
+        .send<svc::Heartbeat>([&](svc::Heartbeat& msg) {
+            if (request) {
+                msg.get<"clientId">().value(request->first); // response: echoes the request's ids
+                msg.get<"requestId">().value(request->second);
+            } else {
+                msg.get<"clientId">().reset(); // spontaneous heartbeat: no addressee
+                msg.get<"requestId">().value(0);
+            }
+            msg.get<"serviceId">().reset(); // no id: the example is not registered in Metadata
+            msg.get<"startTs">().value(turbofw::realtimeNanos());
+            msg.get<"ts">().value(turbofw::realtimeNanos());
+            msg.get<"intervalMs">().value(kIntervalMs.count());
+            msg.get<"flags">().value(flags);
+        })
+        .has_value();
 }
 
 } // namespace
@@ -89,12 +98,12 @@ auto main(int argc, char* argv[]) -> int {
     std::println("scope: {}, working directory: {}", env->scope(), env->workingDirectory().string());
 
     // Open the service's own queues; they are created with options from the config if missing
-    auto producer = env->createProducer<turboq::MulticastMessageQueue::Producer>("heartbeat@events", false);
+    auto producer = env->createProducer<HeartbeatProducer>("heartbeat@events", false);
     if (!producer) [[unlikely]] {
         std::println(stderr, "can't create producer: {}", producer.error());
         return 1;
     }
-    auto consumer = env->createConsumer<turboq::MPSCMessageQueue::Consumer>("heartbeat@cmd", false);
+    auto consumer = env->createConsumer<HeartbeatConsumer>("heartbeat@cmd", false);
     if (!consumer) [[unlikely]] {
         std::println(stderr, "can't create consumer: {}", consumer.error());
         return 1;
@@ -105,25 +114,21 @@ auto main(int argc, char* argv[]) -> int {
 
     auto nextHeartbeat = turbofw::monotonicNanos();
     while (!stopRequested) {
-        // Serve requests from the mpsc queue; messages are dispatched by (schemaId, templateId)
-        for (;;) {
-            auto const buffer = consumer->fetch();
-            if (buffer.empty()) {
-                break;
-            }
+        // Serve requests from the mpsc queue; messages are dispatched by (schemaId, templateId).
+        // receive() drains the queue, so all currently pending requests are served per iteration.
+        consumer->receive([&](std::span<std::byte const> buffer) {
             auto const header = svc::MessageHeader{const_cast<std::byte*>(buffer.data())};
             if (header.get<"schemaId">().value() == svc::HeartbeatRequest::sbeSchemaId() &&
                 header.get<"templateId">().value() == svc::HeartbeatRequest::sbeTemplateId()) {
-                auto const bytes = std::span<std::byte>{const_cast<std::byte*>(buffer.data()), buffer.size()};
                 auto request = svc::HeartbeatRequest{
-                    bytes, header.sbeEncodedLength(), header.get<"blockLength">().value(),
+                    std::span<std::byte>{const_cast<std::byte*>(buffer.data()), buffer.size()},
+                    header.sbeEncodedLength(), header.get<"blockLength">().value(),
                     header.get<"version">().value()};
                 std::println("heartbeat request from client {}", request.get<"clientId">().value());
                 publishHeartbeat(*producer, svc::ServiceFlags{},
                     std::make_pair(request.get<"clientId">().value(), request.get<"requestId">().value()));
             }
-            consumer->consume();
-        }
+        });
 
         // Periodic heartbeat when nothing else has been published for intervalMs
         auto const now = turbofw::monotonicNanos();
