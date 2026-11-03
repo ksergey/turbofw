@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <cerrno>
+#include <cstddef>
 #include <expected>
 #include <functional>
 
@@ -13,9 +15,15 @@
 namespace turbofw::mixin {
 
 /// Adds a `send` operation to a producer that provides `prepare()` and `commit()`.
-/// It prepares a buffer, passes it to the callback, and commits it if the callback returns normally.
-/// If no buffer is available, it returns an error. Exceptions from the callback propagate,
-/// and the prepared buffer is not committed.
+///
+/// Reserves a buffer, passes it to the callback, and publishes it by committing the full prepared size.
+/// If no buffer is available, returns `ENOBUFS` without touching the callback. Note: for an mpsc producer
+/// `prepare()` itself may throw when the payload exceeds the slot size -- don't catch that either, it is a fatal
+/// misconfiguration, not an ordinary failure.
+///
+/// The callback follows the hot-path exception rule (see AGENTS.md): it may throw only to signal an unrecoverable,
+/// fatal error. There is no rollback on the exception path: the prepared buffer is left uncommitted, and for an mpsc
+/// queue an uncommitted slot stalls its consumer for good.
 struct SendMixin {
     template <typename Self, typename Fn>
         requires turboq::Producer<std::remove_cvref_t<Self>>

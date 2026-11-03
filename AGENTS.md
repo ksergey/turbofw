@@ -138,9 +138,13 @@ The project is C++23. Prefer modern standard facilities over hand-written or thi
 C-style constructs:
 
 - **Errors:** return `std::expected<T, E>` for recoverable failures instead of exceptions, error codes or
-  out-parameters; chain steps with its monadic operations (`and_then`, `transform`, `or_else`). Keep `E` small and
-  allocation-free (an `enum class` or a small struct), not a `std::string`. The same goes for `std::optional`
-  (`and_then`, `transform`, `or_else`, `value_or`). No exceptions for control flow, and none on hot paths.
+  out-parameters; chain steps with its monadic operations (`and_then`, `transform`, `or_else`, `value_or`). Keep `E`
+  small and allocation-free (an `enum class` or a small struct), not a `std::string`. The same goes for `std::optional`
+  (`and_then`, `transform`, `or_else`, `value_or`). No exceptions for control flow. On hot paths (queue
+  produce/consume, message encode/decode) an exception is allowed for exactly one case: an unrecoverable error that
+  kills the service anyway. Callbacks passed to hot-path helpers (e.g. turbofw mixins) fall under the same rule:
+  never throw to signal an ordinary failure -- thrown-through state is not rolled back (an uncommitted mpsc slot, for
+  example, stalls its consumer for good).
 - **Ranges:** use `std::ranges` algorithms and `std::views` (`filter`, `transform`, `take`, `iota`, `reverse`, ...)
   instead of raw index loops and iterator pairs where they read better. Views are lazy and don't allocate;
   `std::ranges::to` and anything else that builds a container does, so keep it off hot paths. Views such as `zip` and

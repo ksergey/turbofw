@@ -3,15 +3,21 @@
 
 #pragma once
 
+#include <cstddef>
 #include <functional>
 
 #include <turboq/Concepts.h>
 
-#include <turbofw/ScopeGuard.h>
-
 namespace turbofw::mixin {
 
 /// Adds a `receive` operation to a consumer that provides `fetch()` and `consume()`.
+///
+/// Drains the queue: repeatedly fetches the next buffer and passes it to the callback until the queue is empty.
+/// Returns the number of processed buffers.
+///
+/// The callback follows the hot-path exception rule (see AGENTS.md): it may throw only to signal an unrecoverable,
+/// fatal error. An ordinary failure must not throw: the buffer is consumed when the callback returns normally --
+/// there is no rollback on the exception path, and an unconsumed mpsc slot stalls the consumer for good.
 struct ReceiveMixin {
     template <typename Self, typename Fn>
         requires turboq::Consumer<std::remove_cvref_t<Self>>
@@ -23,14 +29,9 @@ struct ReceiveMixin {
             if (buffer.empty()) {
                 break;
             }
-
-            // Consume the buffer when this iteration ends, including if the callback throws.
-            auto release = ScopeGuard{[&self] noexcept {
-                self.consume();
-            }};
-
             ++receivedCount;
             std::invoke(fn, buffer);
+            self.consume();
         }
 
         return receivedCount;
