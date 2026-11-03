@@ -16,10 +16,6 @@
 
 namespace turbofw::mixin {
 
-/// The SBE MessageHeader is a fixed 8-byte composite (blockLength, templateId, schemaId, version) that every
-/// generated message writes before its body, so it is always part of the published payload
-inline constexpr auto kSbeMessageHeaderSize = std::size_t{8};
-
 /// Checks M is a generated SBE message type: it can apply an SBE MessageHeader to a buffer and compute the buffer
 /// size it needs, given the per-message SizeHint (one entry per repeating group / var-length data field)
 template <typename M>
@@ -32,8 +28,7 @@ concept SbeMessage = requires(std::span<std::byte> buffer, typename M::SizeHint 
 /// Checks the message has variable-size parts (repeating groups or var-length data fields): its SizeHint is not
 /// empty, so the sizes of those parts must be passed to the send operation
 template <typename M>
-concept SbeMessageWithVars = requires { typename M::SizeHint; }
-    && (std::tuple_size_v<typename M::SizeHint> != 0);
+concept SbeMessageWithVars = requires { typename M::SizeHint; } && (std::tuple_size_v<typename M::SizeHint> != 0);
 
 /// Adds an SBE-aware `send` operation to a producer that provides `prepare()` and `commit()`.
 ///
@@ -67,33 +62,35 @@ concept SbeMessageWithVars = requires { typename M::SizeHint; }
 /// uncommitted slot stalls its consumer for good.
 struct SbeSendMixin {
     template <SbeMessage Message, typename Self, typename Fn>
-        requires SbeMessageWithVars<Message> && turboq::Producer<std::remove_cvref_t<Self>>
-            && std::invocable<Fn&, Message&>
+        requires SbeMessageWithVars<Message> && turboq::Producer<std::remove_cvref_t<Self>> &&
+                     std::invocable<Fn&, Message&>
     auto send(this Self&& self, typename Message::SizeHint hint, Fn&& fn) -> std::expected<void, std::error_code> {
-        auto const buffer = self.prepare(kSbeMessageHeaderSize + Message::sbeComputeSize(hint));
+        auto const bufferSize = Message::Header::sbeEncodedLength() + Message::sbeComputeSize(hint);
+        auto const buffer = self.prepare(bufferSize);
         if (buffer.empty()) [[unlikely]] {
             return std::unexpected{makePosixErrorCode(ENOBUFS)};
         }
 
         auto msg = Message::wrapAndApplyHeader(buffer);
         std::invoke(std::forward<Fn>(fn), msg);
-        self.commit(kSbeMessageHeaderSize + msg.encodedSize());
+        self.commit();
 
         return {};
     }
 
     template <SbeMessage Message, typename Self, typename Fn>
-        requires (!SbeMessageWithVars<Message>) && turboq::Producer<std::remove_cvref_t<Self>>
-            && std::invocable<Fn&, Message&>
+        requires(!SbeMessageWithVars<Message>) && turboq::Producer<std::remove_cvref_t<Self>> &&
+                    std::invocable<Fn&, Message&>
     auto send(this Self&& self, Fn&& fn) -> std::expected<void, std::error_code> {
-        auto const buffer = self.prepare(kSbeMessageHeaderSize + Message::sbeComputeSize(typename Message::SizeHint{}));
+        constexpr auto bufferSize = Message::Header::sbeEncodedLength() + Message::sbeComputeSize();
+        auto const buffer = self.prepare(bufferSize);
         if (buffer.empty()) [[unlikely]] {
             return std::unexpected{makePosixErrorCode(ENOBUFS)};
         }
 
         auto msg = Message::wrapAndApplyHeader(buffer);
         std::invoke(std::forward<Fn>(fn), msg);
-        self.commit(kSbeMessageHeaderSize + msg.encodedSize());
+        self.commit();
 
         return {};
     }
