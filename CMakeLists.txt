@@ -14,6 +14,7 @@ CPMAddPackage("gh:nlohmann/json@3.12.0")
 CPMAddPackage("gh:doctest/doctest@2.5.3")
 CPMAddPackage("gh:fmtlib/fmt#12.2.0")
 CPMAddPackage("gh:jarro2783/cxxopts@3.3.1")
+CPMAddPackage("gh:boostorg/mp11#boost-1.92.0")
 
 if (turbofw_BUILD_BENCHMARKS)
     CPMAddPackage(
