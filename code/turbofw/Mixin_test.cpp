@@ -16,7 +16,8 @@
 
 #include "Error.h"
 #include "mixin/ReceiveMixin.h"
-#include "mixin/SbeSendMixin.h"
+#include "mixin/SBEReceiveMixin.h"
+#include "mixin/SBESendMixin.h"
 #include "mixin/SendMixin.h"
 #include "testing/TestQueue.h"
 
@@ -31,7 +32,7 @@ struct TestConsumer : public testing::Consumer, public mixin::ReceiveMixin {
     using testing::Consumer::Consumer;
 };
 
-struct TestSbeProducer : public testing::Producer, public mixin::SbeSendMixin {
+struct TestSBEProducer : public testing::Producer, public mixin::SBESendMixin {
     using testing::Producer::Producer;
 };
 
@@ -106,10 +107,10 @@ TEST_SUITE("Mixin") {
     }
 }
 
-TEST_SUITE("SbeSendMixin") {
+TEST_SUITE("SBESendMixin") {
     TEST_CASE("fixed message: send() without sizes, round trip") {
         auto queue = testing::Queue{};
-        auto producer = TestSbeProducer{&queue};
+        auto producer = TestSBEProducer{&queue};
         auto consumer = TestConsumer{&queue};
 
         CHECK_EQ(consumer.receive(kNoOpReceive), 0);
@@ -147,7 +148,7 @@ TEST_SUITE("SbeSendMixin") {
 
     TEST_CASE("group message: send() with sizes, round trip") {
         auto queue = testing::Queue{};
-        auto producer = TestSbeProducer{&queue};
+        auto producer = TestSBEProducer{&queue};
         auto consumer = TestConsumer{&queue};
 
         CHECK_EQ(consumer.receive(kNoOpReceive), 0);
@@ -203,7 +204,7 @@ TEST_SUITE("SbeSendMixin") {
 
     TEST_CASE("data fields: send() with sizes, round trip") {
         auto queue = testing::Queue{};
-        auto producer = TestSbeProducer{&queue};
+        auto producer = TestSBEProducer{&queue};
         auto consumer = TestConsumer{&queue};
 
         auto constexpr kClientCode = "ALPHA";

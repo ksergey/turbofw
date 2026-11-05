@@ -27,7 +27,7 @@
 #include <turbofw/Clock.h>
 #include <turbofw/Environment.h>
 #include <turbofw/mixin/ReceiveMixin.h>
-#include <turbofw/mixin/SbeSendMixin.h>
+#include <turbofw/mixin/SBESendMixin.h>
 #include <turbofw/svc/schema.h>
 
 namespace {
@@ -41,7 +41,7 @@ extern "C" auto onStop(int) -> void {
 constexpr auto kIntervalMs = std::chrono::duration<std::uint32_t, std::milli>{500};
 
 /// Multicast producer composed with the SBE send mixin
-struct HeartbeatProducer : public turboq::MulticastMessageQueue::Producer, public turbofw::mixin::SbeSendMixin {
+struct HeartbeatProducer : public turboq::MulticastMessageQueue::Producer, public turbofw::mixin::SBESendMixin {
     explicit HeartbeatProducer(turboq::MulticastMessageQueue::Producer producer) noexcept
         : turboq::MulticastMessageQueue::Producer{std::move(producer)} {}
 };
@@ -122,8 +122,7 @@ auto main(int argc, char* argv[]) -> int {
                 header.get<"templateId">().value() == svc::HeartbeatRequest::sbeTemplateId()) {
                 auto request = svc::HeartbeatRequest{
                     std::span<std::byte>{const_cast<std::byte*>(buffer.data()), buffer.size()},
-                    header.sbeEncodedLength(), header.get<"blockLength">().value(),
-                    header.get<"version">().value()};
+                    header.sbeEncodedLength(), header.get<"blockLength">().value(), header.get<"version">().value()};
                 std::println("heartbeat request from client {}", request.get<"clientId">().value());
                 publishHeartbeat(*producer, svc::ServiceFlags{},
                     std::make_pair(request.get<"clientId">().value(), request.get<"requestId">().value()));

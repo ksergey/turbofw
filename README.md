@@ -9,47 +9,6 @@
 > turbofw is a low-latency C++ framework for exchange trading: strategies, market data connectors and trade
 > connectors talking to each other over shared-memory queues.
 
-## Layout
-
-| Path | What lives there |
-|---|---|
-| `code/turbofw/` | Core library `turbofw::turbofw` (`*.h`, `*.cpp`), unit tests (`*_test.cpp`), benchmarks (`*_bm.cpp`) |
-| `schemas/market_data_schema.xml` | SBE market data schema (package `md`, schemaId 1): MBP/MBO updates, trades, statistics, instrument status, snapshots, snapshot requests → `<turbofw/md/schema.h>`, namespace `md` |
-| `schemas/metadata_schema.xml` | SBE metadata schema (package `meta`, schemaId 2): instrument definitions, metadata service registration and requests → `<turbofw/meta/schema.h>`, namespace `meta` |
-| `schemas/trading_schema.xml` | SBE trading schema (package `trd`, schemaId 3): contexts, new/replace/cancel orders and status, execution reports, command rejects → `<turbofw/trd/schema.h>`, namespace `trd` |
-| `schemas/service_schema.xml` | SBE service schema (package `svc`, schemaId 4): heartbeats and runtime log level, shared by every service → `<turbofw/svc/schema.h>`, namespace `svc` |
-| `schemas/common_types.xml` | Types shared by all schemas (message header, group size, InstrumentId, ClientId, Price9, Qty, Timestamp, their NULL variants and RequestStatus), XIncluded into each |
-| `cmake/` | `GetCPM.cmake` (dependency bootstrap, same as in turboq) |
-
-## Dependencies
-
-- C++23 compiler (GCC 14+ or Clang 20+)
-- CMake 4.0+ (required by `ksergey/xxx`), Ninja recommended
-- Python 3.10+ with `venv` (the SBE code generator runs in a virtualenv created in the build directory)
-
-Everything else is fetched at configure time via [CPM.cmake](https://github.com/cpm-cmake/CPM.cmake), so the
-first configure needs network access. Set `CPM_SOURCE_CACHE` to reuse downloads across build directories.
-
-| Dependency | Version | Used for |
-|---|---|---|
-| [ksergey/turboq](https://github.com/ksergey/turboq) | `master` | Shared-memory message queues (linked into `turbofw`) |
-| [ksergey/turboq-reactor](https://github.com/ksergey/turboq-reactor) | `master` | Event loop / networking (linked into `turbofw`) |
-| [ksergey/turboq-logger](https://github.com/ksergey/turboq-logger) | `master` | Logging |
-| [ksergey/sbe-code-gen](https://github.com/ksergey/sbe-code-gen) | `master` | SBE codec generation (`SbeMakeCodec()`) |
-| [ksergey/xxx](https://github.com/ksergey/xxx) | `master` | Terminal UI |
-| [nlohmann/json](https://github.com/nlohmann/json) | `3.12.0` | JSON; xxx examples |
-| [doctest](https://github.com/doctest/doctest) | `2.5.3` | Unit tests of turbofw and of the ksergey/* libraries |
-| [google/benchmark](https://github.com/google/benchmark) | `1.10.0` | Benchmarks (only with `turbofw_BUILD_BENCHMARKS`) |
-| [fmt](https://github.com/fmtlib/fmt) | `12.2.0` | turboq-logger |
-| [cxxopts](https://github.com/jarro2783/cxxopts) | `3.3.1` | Tools and examples of turboq, turboq-reactor, xxx |
-| [boost/mp11](https://github.com/boostorg/mp11) | `boost-1.92.0` | Type lists; SBE codecs are generated with `MP11 ON` in `SbeMakeCodec()` |
-
-External dependencies shared with the ksergey/* libraries are added in the root `CMakeLists.txt` before the
-ksergey/* libraries: the first `CPMAddPackage()` of a package wins, so each one is fetched once, in the version
-listed here. When a ksergey/* library gets a new external dependency that turbofw or another library also uses,
-add it there too, with the same package `NAME`. Dependencies private to one library (liburing in turboq-reactor,
-pybind11 in turboq) are left to that library.
-
 ## Build
 
 ```bash
@@ -59,24 +18,6 @@ ctest --test-dir build/code --output-on-failure
 
 ./build/code/turbofw-Clock-bm
 ```
-
-### CMake options
-
-| Option | Default | Effect |
-|---|---|---|
-| `turbofw_BUILD_TESTS` | `ON` | Build `*_test.cpp` files as doctest executables and register them with `ctest` |
-| `turbofw_BUILD_BENCHMARKS` | `ON` | Build `*_bm.cpp` files as google-benchmark executables |
-| `turbofw_SANITIZER` | `OFF` | ASan + UBSan + LeakSanitizer |
-| `turbofw_TSAN` | `OFF` | ThreadSanitizer (can't be combined with `turbofw_SANITIZER`) |
-
-## Adding tests and benchmarks
-
-Test and benchmark discovery uses `TurboQAddTestsFromSourceList` / `TurboQAddBenchmarksFromSourceList` from
-turboq's `cmake/TurboQHelpers.cmake` (defined when turboq is added via CPM). Drop a file into `code/turbofw/`
-and re-run the CMake configure — no CMake edits needed:
-
-- `<Name>_test.cpp` becomes `turbofw-<Name>-test`, linked against `doctest::doctest_with_main` and registered with `ctest`;
-- `<Name>_bm.cpp` becomes `turbofw-<Name>-bm`, linked against `benchmark::benchmark_main`.
 
 ## License
 

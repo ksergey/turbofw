@@ -13,22 +13,9 @@
 #include <turboq/Concepts.h>
 
 #include <turbofw/Error.h>
+#include <turbofw/SBE.h>
 
 namespace turbofw::mixin {
-
-/// Checks M is a generated SBE message type: it can apply an SBE MessageHeader to a buffer and compute the buffer
-/// size it needs, given the per-message SizeHint (one entry per repeating group / var-length data field)
-template <typename M>
-concept SbeMessage = requires(std::span<std::byte> buffer, typename M::SizeHint sizeHint) {
-    M::wrapAndApplyHeader(buffer);
-    M::sbeComputeSize(sizeHint);
-    M::sbeComputeSize();
-};
-
-/// Checks the message has variable-size parts (repeating groups or var-length data fields): its SizeHint is not
-/// empty, so the sizes of those parts must be passed to the send operation
-template <typename M>
-concept SbeMessageWithVars = requires { typename M::SizeHint; } && (std::tuple_size_v<typename M::SizeHint> != 0);
 
 /// Adds an SBE-aware `send` operation to a producer that provides `prepare()` and `commit()`.
 ///
@@ -64,35 +51,45 @@ concept SbeMessageWithVars = requires { typename M::SizeHint; } && (std::tuple_s
 /// The callback follows the hot-path exception rule: it may throw only to signal an unrecoverable, fatal error.
 /// There is no rollback on the exception path: the prepared buffer is left uncommitted, and for an mpsc queue an
 /// uncommitted slot stalls its consumer for good.
-struct SbeSendMixin {
-    template <SbeMessage Message, typename Self, typename Fn>
-        requires SbeMessageWithVars<Message> && turboq::Producer<std::remove_cvref_t<Self>> &&
-                     std::invocable<Fn&, Message&>
-    auto send(this Self&& self, typename Message::SizeHint hint, Fn&& fn) -> std::expected<void, std::error_code> {
-        auto const bufferSize = Message::Header::sbeEncodedLength() + Message::sbeComputeSize(hint);
+struct SBESendMixin {
+    template <typename M, typename Self, typename Fn>
+        requires SBEMessage<M> && SBEMessageWithVars<M> && turboq::Producer<std::remove_cvref_t<Self>> &&
+                     std::invocable<Fn&, M&>
+    auto send(this Self&& self, typename M::SizeHint hint, Fn&& fn) -> std::expected<void, std::error_code> {
+        auto const bufferSize = M::Header::sbeEncodedLength() + M::sbeComputeSize(hint);
         auto const buffer = self.prepare(bufferSize);
         if (buffer.empty()) [[unlikely]] {
             return std::unexpected{makePosixErrorCode(ENOBUFS)};
         }
 
-        auto msg = Message::wrapAndApplyHeader(buffer);
+        auto msg = M::wrapAndApplyHeader(buffer);
+        if constexpr (requires { typename Self::Mixins; }) {
+            [&]<template <typename...> typename List, typename... Ts>(List<Ts...>) {
+                // TODO: call Ts::updateSBEBody(msg) for each mixin with available method
+            }(typename Self::Mixins{});
+        }
         std::invoke(std::forward<Fn>(fn), msg);
         self.commit();
 
         return {};
     }
 
-    template <SbeMessage Message, typename Self, typename Fn>
-        requires(!SbeMessageWithVars<Message>) && turboq::Producer<std::remove_cvref_t<Self>> &&
-                    std::invocable<Fn&, Message&>
+    template <typename M, typename Self, typename Fn>
+        requires SBEMessage<M> &&
+                     (!SBEMessageWithVars<M>) && turboq::Producer<std::remove_cvref_t<Self>> && std::invocable<Fn&, M&>
     auto send(this Self&& self, Fn&& fn) -> std::expected<void, std::error_code> {
-        constexpr auto bufferSize = Message::Header::sbeEncodedLength() + Message::sbeComputeSize();
+        constexpr auto bufferSize = M::Header::sbeEncodedLength() + M::sbeComputeSize();
         auto const buffer = self.prepare(bufferSize);
         if (buffer.empty()) [[unlikely]] {
             return std::unexpected{makePosixErrorCode(ENOBUFS)};
         }
 
-        auto msg = Message::wrapAndApplyHeader(buffer);
+        auto msg = M::wrapAndApplyHeader(buffer);
+        if constexpr (requires { typename Self::Mixins; }) {
+            [&]<template <typename...> typename List, typename... Ts>(List<Ts...>) {
+                // TODO: call Ts::updateSBEBody(msg) for each mixin with available method
+            }(typename Self::Mixins{});
+        }
         std::invoke(std::forward<Fn>(fn), msg);
         self.commit();
 

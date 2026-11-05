@@ -8,11 +8,12 @@
 #include <type_traits>
 #include <utility>
 
-#include <boost/mp11/list.hpp>
 #include <doctest/doctest.h>
 
-#include <turbofw/md/schema.h>
 #include <turbofw/SBE.h>
+#include <turbofw/mp/List.h>
+
+#include <turbofw/md/schema.h>
 #include <turbofw/svc/schema.h>
 #include <turbofw/trd/schema.h>
 
@@ -79,23 +80,29 @@ auto encodeSetLogLevel(std::span<std::byte> buffer) -> void {
 } // namespace
 
 TEST_SUITE("SBE") {
-    TEST_CASE("tryDecodeSbeFor: direct matching of a single message type") {
+    TEST_CASE("tryDecodeSBEFor: direct matching of a single message type") {
         auto buffer = std::array<std::byte, kBufferSize>{};
         encodeHeartbeat(buffer);
         auto const view = std::span<std::byte const>{buffer.data(), buffer.size()};
 
         auto heartbeat = 0;
-        CHECK(turbofw::tryDecodeSbeFor<svc::Heartbeat>(view, [&](svc::Heartbeat) { ++heartbeat; }));
+        CHECK(turbofw::tryDecodeSBEFor<svc::Heartbeat>(view, [&](svc::Heartbeat) {
+            ++heartbeat;
+        }));
         CHECK_EQ(heartbeat, 1);
 
         // a decode must not write to the buffer: the header stays intact for later reads
         auto setLogLevel = 0;
-        CHECK_FALSE(turbofw::tryDecodeSbeFor<svc::SetLogLevel>(view, [&](svc::SetLogLevel) { ++setLogLevel; }));
+        CHECK_FALSE(turbofw::tryDecodeSBEFor<svc::SetLogLevel>(view, [&](svc::SetLogLevel) {
+            ++setLogLevel;
+        }));
         CHECK_EQ(setLogLevel, 0);
 
         // shorter than a MessageHeader: nothing to match, no callback call
-        CHECK_FALSE(turbofw::tryDecodeSbeFor<svc::Heartbeat>(
-            std::span<std::byte const>{buffer.data(), 4}, [&](svc::Heartbeat) { ++heartbeat; }));
+        CHECK_FALSE(
+            turbofw::tryDecodeSBEFor<svc::Heartbeat>(std::span<std::byte const>{buffer.data(), 4}, [&](svc::Heartbeat) {
+                ++heartbeat;
+            }));
         CHECK_EQ(heartbeat, 1);
     }
 
@@ -104,18 +111,17 @@ TEST_SUITE("SBE") {
         encodeHeartbeat(buffer);
 
         auto calls = 0;
-        auto const result = turbofw::tryDecodeSbe<boost::mp11::mp_list<svc::Heartbeat>>(
-            buffer, [&](svc::Heartbeat msg) {
-                ++calls;
-                CHECK_EQ(msg.get<"clientId">().value(), 17u);
-                CHECK_EQ(msg.get<"requestId">().value(), 3u);
-                CHECK_EQ(msg.get<"serviceId">().value(), 1u);
-                CHECK_EQ(msg.get<"startTs">().value(), 111);
-                CHECK_EQ(msg.get<"ts">().value(), 222);
-                CHECK_EQ(msg.get<"intervalMs">().value(), 500u);
-                auto flags = msg.get<"flags">().value();
-                CHECK(flags.start());
-            });
+        auto const result = turbofw::tryDecodeSBE<mp::List<svc::Heartbeat>>(buffer, [&](svc::Heartbeat msg) {
+            ++calls;
+            CHECK_EQ(msg.get<"clientId">().value(), 17u);
+            CHECK_EQ(msg.get<"requestId">().value(), 3u);
+            CHECK_EQ(msg.get<"serviceId">().value(), 1u);
+            CHECK_EQ(msg.get<"startTs">().value(), 111);
+            CHECK_EQ(msg.get<"ts">().value(), 222);
+            CHECK_EQ(msg.get<"intervalMs">().value(), 500u);
+            auto flags = msg.get<"flags">().value();
+            CHECK(flags.start());
+        });
         REQUIRE(result);
         CHECK_EQ(calls, 1);
     }
@@ -156,11 +162,11 @@ TEST_SUITE("SBE") {
                 CHECK_EQ(msg.get<"intervalMs">().value(), 500u);
             },
         };
-        using Messages = boost::mp11::mp_list<md::Snapshot, trd::CreateContext, svc::Heartbeat>;
+        using Messages = mp::List<md::Snapshot, trd::CreateContext, svc::Heartbeat>;
 
-        CHECK(turbofw::tryDecodeSbe<Messages>(snapshotBuffer, fn));
-        CHECK(turbofw::tryDecodeSbe<Messages>(ctxBuffer, fn));
-        CHECK(turbofw::tryDecodeSbe<Messages>(hbBuffer, fn));
+        CHECK(turbofw::tryDecodeSBE<Messages>(snapshotBuffer, fn));
+        CHECK(turbofw::tryDecodeSBE<Messages>(ctxBuffer, fn));
+        CHECK(turbofw::tryDecodeSBE<Messages>(hbBuffer, fn));
         CHECK_EQ(snapshotCalls, 1);
         CHECK_EQ(contextCalls, 1);
         CHECK_EQ(heartbeatCalls, 1);
@@ -171,19 +177,17 @@ TEST_SUITE("SBE") {
         encodeSnapshot(buffer);
 
         auto calls = 0;
-        auto const result = turbofw::tryDecodeSbe<boost::mp11::mp_list<md::Snapshot, trd::CreateContext>>(
-            buffer,
-            [&](auto msg) {
-                // `if constexpr` instead of a static_assert: the invocable check instantiates both branches,
-                // a static_assert would fail for the CreateContext branch even if it never runs
-                if constexpr (std::is_same_v<decltype(msg), md::Snapshot>) {
-                    ++calls;
-                    CHECK_EQ(msg.template get<"header">().template get<"instrumentId">().value(), 42u);
-                } else {
-                    ++calls;
-                    FAIL("the dispatch must pick the message type matching the buffer, not another list entry");
-                }
-            });
+        auto const result = turbofw::tryDecodeSBE<mp::List<md::Snapshot, trd::CreateContext>>(buffer, [&](auto msg) {
+            // `if constexpr` instead of a static_assert: the invocable check instantiates both branches,
+            // a static_assert would fail for the CreateContext branch even if it never runs
+            if constexpr (std::is_same_v<decltype(msg), md::Snapshot>) {
+                ++calls;
+                CHECK_EQ(msg.template get<"header">().template get<"instrumentId">().value(), 42u);
+            } else {
+                ++calls;
+                FAIL("the dispatch must pick the message type matching the buffer, not another list entry");
+            }
+        });
         REQUIRE(result);
         CHECK_EQ(calls, 1);
     }
@@ -193,9 +197,10 @@ TEST_SUITE("SBE") {
         encodeSetLogLevel(buffer);
 
         auto calls = 0;
-        auto const callback = [&calls](auto&&...) { ++calls; };
-        auto const result =
-            turbofw::tryDecodeSbe<boost::mp11::mp_list<svc::Heartbeat, svc::HeartbeatRequest>>(buffer, callback);
+        auto const callback = [&calls](auto&&...) {
+            ++calls;
+        };
+        auto const result = turbofw::tryDecodeSBE<mp::List<svc::Heartbeat, svc::HeartbeatRequest>>(buffer, callback);
         REQUIRE_FALSE(result);
         CHECK_EQ(calls, 0);
     }
@@ -208,14 +213,16 @@ TEST_SUITE("SBE") {
 
         auto buffer = std::array<std::byte, kBufferSize>{};
         auto calls = 0;
-        auto const callback = [&calls](auto&&...) { ++calls; };
-        using Messages = boost::mp11::mp_list<svc::Heartbeat, trd::CreateContext>;
+        auto const callback = [&calls](auto&&...) {
+            ++calls;
+        };
+        using Messages = mp::List<svc::Heartbeat, trd::CreateContext>;
 
         // a buffer shorter than a MessageHeader is not an SBE message at all
-        CHECK_FALSE(turbofw::tryDecodeSbe<Messages>(std::span<std::byte const>{buffer.data(), 4}, callback));
-        CHECK_FALSE(turbofw::tryDecodeSbe<Messages>(std::span<std::byte const>{}, callback));
+        CHECK_FALSE(turbofw::tryDecodeSBE<Messages>(std::span<std::byte const>{buffer.data(), 4}, callback));
+        CHECK_FALSE(turbofw::tryDecodeSBE<Messages>(std::span<std::byte const>{}, callback));
 
-        CHECK_FALSE(turbofw::tryDecodeSbe<Messages>(buffer, callback));
+        CHECK_FALSE(turbofw::tryDecodeSBE<Messages>(buffer, callback));
         CHECK_EQ(calls, 0);
     }
 
@@ -227,8 +234,10 @@ TEST_SUITE("SBE") {
         auto constexpr kBlockSize = 8 + svc::Heartbeat::sbeBlockLength() - 1;
         auto const truncated = std::span<std::byte const>{buffer.data(), kBlockSize};
         auto calls = 0;
-        auto const impaired = [&calls](svc::Heartbeat) { ++calls; };
-        CHECK_THROWS((void)turbofw::tryDecodeSbe<boost::mp11::mp_list<svc::Heartbeat>>(truncated, impaired));
+        auto const impaired = [&calls](svc::Heartbeat) {
+            ++calls;
+        };
+        CHECK_THROWS((void)turbofw::tryDecodeSBE<mp::List<svc::Heartbeat>>(truncated, impaired));
         CHECK_EQ(calls, 0);
     }
 }
