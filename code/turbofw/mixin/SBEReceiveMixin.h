@@ -11,6 +11,8 @@
 
 #include <turbofw/SBE.h>
 
+#include "Utility.h"
+
 namespace turbofw::mixin {
 
 /// Adds a SBE-aware `receive` operation to a consumer that provides `fetch()` and `consume()`.
@@ -34,13 +36,11 @@ struct SBEReceiveMixin {
                 break;
             }
             ++receivedCount;
-            if constexpr (requires { typename Self::Mixins; }) {
-                // TODO: decode message header. Is it possible to check Header type of each message in L is the same or
-                // is bit compatible? Or need to make changes in sbe-code-gen for that check?
-                [&]<template <typename...> typename List, typename... Ts>(List<Ts...>) {
-                    // TODO:
-                }(typename Self::Mixins{});
-            }
+
+            forEachMixin<Self>([&]<typename Mixin>(std::type_identity<Mixin>) {
+                // TODO:
+            });
+
             handledCount += tryDecodeSBE<L>(buffer, std::forward<Fn>(fn)) ? 1u : 0u;
             self.consume();
         }

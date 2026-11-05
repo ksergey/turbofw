@@ -5,6 +5,8 @@
 
 #include <type_traits>
 
+#include "Integral.h"
+
 namespace turbofw::mp {
 
 /// Type list for meta programming
@@ -22,8 +24,22 @@ struct IsList<L<Ts...>> : std::true_type {};
 /// Returns the number of elements in the list L
 template <typename L>
 struct Size;
-
 template <template <typename...> typename L, typename... Ts>
-struct Size<L<Ts...>> : std::integral_constant<std::size_t, sizeof...(Ts)> {};
+struct Size<L<Ts...>> : SizeT<sizeof...(Ts)> {};
+
+namespace detail {
+
+template <typename L, template <typename...> typename Y>
+struct RenameImpl;
+template <template <typename...> typename L, typename... Ts, template <typename...> typename Y>
+struct RenameImpl<L<Ts...>, Y> {
+    using type = Y<Ts...>;
+};
+
+} // namespace detail
+
+/// Changes the type of the list L to Y
+template <typename L, template <typename...> typename Y>
+using Rename = typename detail::RenameImpl<L, Y>::type;
 
 } // namespace turbofw::mp

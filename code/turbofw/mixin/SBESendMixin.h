@@ -15,6 +15,8 @@
 #include <turbofw/Error.h>
 #include <turbofw/SBE.h>
 
+#include "Utility.h"
+
 namespace turbofw::mixin {
 
 /// Adds an SBE-aware `send` operation to a producer that provides `prepare()` and `commit()`.
@@ -63,11 +65,13 @@ struct SBESendMixin {
         }
 
         auto msg = M::wrapAndApplyHeader(buffer);
-        if constexpr (requires { typename Self::Mixins; }) {
-            [&]<template <typename...> typename List, typename... Ts>(List<Ts...>) {
-                // TODO: call Ts::updateSBEBody(msg) for each mixin with available method
-            }(typename Self::Mixins{});
-        }
+
+        forEachMixin<Self>([&]<typename Mixin>(std::type_identity<Mixin>) {
+            if constexpr (requires { self.Mixin::updateSBEBody(msg); }) {
+                self.Mixin::updateSBEBody(msg);
+            }
+        });
+
         std::invoke(std::forward<Fn>(fn), msg);
         self.commit();
 
@@ -85,11 +89,13 @@ struct SBESendMixin {
         }
 
         auto msg = M::wrapAndApplyHeader(buffer);
-        if constexpr (requires { typename Self::Mixins; }) {
-            [&]<template <typename...> typename List, typename... Ts>(List<Ts...>) {
-                // TODO: call Ts::updateSBEBody(msg) for each mixin with available method
-            }(typename Self::Mixins{});
-        }
+
+        forEachMixin<Self>([&]<typename Mixin>(std::type_identity<Mixin>) {
+            if constexpr (requires { self.Mixin::updateSBEBody(msg); }) {
+                self.Mixin::updateSBEBody(msg);
+            }
+        });
+
         std::invoke(std::forward<Fn>(fn), msg);
         self.commit();
 
