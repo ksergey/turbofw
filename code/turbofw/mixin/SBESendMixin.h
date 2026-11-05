@@ -66,6 +66,10 @@ struct SBESendMixin {
 
         auto msg = M::wrapAndApplyHeader(buffer);
 
+        // Mixin hooks: stamp common fields into the message buffer before the user callback has its say.
+        // Invoked in `Self::Mixins` list order, skipped for mixins without the method (see forEachMixin).
+        // Messages pass by value (the SBE message objects rule in AGENTS.md), so hooks run one after another
+        // with independent position cursors over the same buffer.
         forEachMixin<Self>([&]<typename Mixin>(std::type_identity<Mixin>) {
             if constexpr (requires { self.Mixin::updateSBEBody(msg); }) {
                 self.Mixin::updateSBEBody(msg);
@@ -90,6 +94,7 @@ struct SBESendMixin {
 
         auto msg = M::wrapAndApplyHeader(buffer);
 
+        // Mixin hooks: see the send overload above
         forEachMixin<Self>([&]<typename Mixin>(std::type_identity<Mixin>) {
             if constexpr (requires { self.Mixin::updateSBEBody(msg); }) {
                 self.Mixin::updateSBEBody(msg);

@@ -11,8 +11,6 @@
 
 #include <turbofw/SBE.h>
 
-#include "Utility.h"
-
 namespace turbofw::mixin {
 
 /// Adds a SBE-aware `receive` operation to a consumer that provides `fetch()` and `consume()`.
@@ -37,9 +35,13 @@ struct SBEReceiveMixin {
             }
             ++receivedCount;
 
-            forEachMixin<Self>([&]<typename Mixin>(std::type_identity<Mixin>) {
-                // TODO:
-            });
+            // TODO: compose the hooks. Per the agreed protocol: after a successful decode, before invoking the
+            // user callback, call `self.Mixin::onSBEMessage(msg)` for every mixin of `Self::Mixins` that
+            // declares the method (in list order), so mixins can audit/filter the decoded message. Because the
+            // message type is only known at the point of dispatch, the current `fn` argument must be wrapped in
+            // a generic lambda that first folds the hooks (with `if constexpr (requires { ... })` per mixin,
+            // see `forEachMixin`) into the invocation of `fn`; a buffer whose (schemaId, templateId) pair is
+            // not in the list must not reach the hooks.
 
             handledCount += tryDecodeSBE<L>(buffer, std::forward<Fn>(fn)) ? 1u : 0u;
             self.consume();

@@ -11,6 +11,30 @@
 namespace turbofw::mp::testing {
 
 TEST_SUITE("Algorithm") {
+    TEST_CASE("At; List") {
+        using Types = List<int, double, char, float>;
+        CHECK(std::is_same_v<At<Types, SizeT<0>>::type, int>);
+        CHECK(std::is_same_v<At<Types, SizeT<1>>::type, double>);
+        CHECK(std::is_same_v<At<Types, SizeT<2>>::type, char>);
+        CHECK(std::is_same_v<At<Types, SizeT<3>>::type, float>);
+    }
+
+    TEST_CASE("At; std::tuple") {
+        using Types = std::tuple<int, double, char, float>;
+        CHECK(std::is_same_v<At<Types, SizeT<0>>::type, int>);
+        CHECK(std::is_same_v<At<Types, SizeT<3>>::type, float>);
+    }
+
+    TEST_CASE("At_c: sugar over At") {
+        using Types = List<int, double, char, float>;
+        CHECK(std::is_same_v<At_c<Types, 0>, int>);
+        CHECK(std::is_same_v<At_c<Types, 1>, double>);
+        CHECK(std::is_same_v<At_c<Types, 2>, char>);
+        CHECK(std::is_same_v<At_c<Types, 3>, float>);
+        // an out-of-range index does not compile (At_c<Types, 4>): std::tuple_element hard-fails with
+        // "tuple_element index out of range", it is not a SFINAE-friendly failure
+    }
+
     TEST_CASE("Find; List") {
         using Types = List<int, double, char, float>;
         CHECK_EQ(Find<Types, int>::value, 0);
