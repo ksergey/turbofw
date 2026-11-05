@@ -42,6 +42,7 @@ first configure needs network access. Set `CPM_SOURCE_CACHE` to reuse downloads 
 | [google/benchmark](https://github.com/google/benchmark) | `1.10.0` | Benchmarks (only with `turbofw_BUILD_BENCHMARKS`) |
 | [fmt](https://github.com/fmtlib/fmt) | `12.2.0` | turboq-logger |
 | [cxxopts](https://github.com/jarro2783/cxxopts) | `3.3.1` | Tools and examples of turboq, turboq-reactor, xxx |
+| [boost/mp11](https://github.com/boostorg/mp11) | `boost-1.92.0` | Type lists; SBE codecs are generated with `MP11 ON` in `SbeMakeCodec()` |
 
 External dependencies shared with the ksergey/* libraries are added in the root `CMakeLists.txt` before the
 ksergey/* libraries: the first `CPMAddPackage()` of a package wins, so each one is fetched once, in the version
