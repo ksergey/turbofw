@@ -15,7 +15,7 @@ foreach (entry IN LISTS Schemas)
     SbeMakeCodec(${TargetName}-${package}-sbe
         SCHEMA ${PROJECT_SOURCE_DIR}/schemas/${file}.xml
         OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/sbe-${package}
-        GENERATOR cpp-min
+        GENERATOR cpp-split
         INCLUDE_BASE turbofw/${package})
     # SbeMakeCodec() only tracks the schema file itself; regenerate when the XIncluded common types change
     add_custom_command(
