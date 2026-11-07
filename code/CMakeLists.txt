@@ -2,28 +2,33 @@ set(TargetName turbofw)
 
 # Framework message protocols (SBE):
 #   schemas/<file>.xml -> <turbofw/<package>>/schema.h | namespace <package>
+# All schemas are generated together (SbeMakeCodecBundle): the types they
+# share via schemas/common_types.xml become one set of fragment headers used
+# by every schema, so md::MessageHeader and svc::MessageHeader are the same
+# C++ type (required by TUs -- e.g. tests -- that use two protocols at once).
 set(Schemas
     md:market_data_schema    # market data: package md, schemaId 1
     meta:metadata_schema     # metadata (reference data): package meta, schemaId 2
     trd:trading_schema       # trading connector: package trd, schemaId 3
     svc:service_schema)      # common service messages: package svc, schemaId 4
 
+set(SchemaPackages)
+set(SchemaFiles)
 foreach (entry IN LISTS Schemas)
     string(REPLACE ":" ";" entry "${entry}")
     list(GET entry 0 package)
     list(GET entry 1 file)
-    SbeMakeCodec(${TargetName}-${package}-sbe
-        SCHEMA ${PROJECT_SOURCE_DIR}/schemas/${file}.xml
-        OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/sbe-${package}
-        GENERATOR cpp-split
-        INCLUDE_BASE turbofw/${package})
-    # SbeMakeCodec() only tracks the schema file itself; regenerate when the XIncluded common types change
-    add_custom_command(
-        OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/sbe-${package}/turbofw/${package}/schema.h
-        APPEND
-        DEPENDS ${PROJECT_SOURCE_DIR}/schemas/common_types.xml)
-    add_library(${TargetName}::${package}-sbe ALIAS ${TargetName}-${package}-sbe)
+    list(APPEND SchemaPackages ${package})
+    list(APPEND SchemaFiles ${PROJECT_SOURCE_DIR}/schemas/${file}.xml)
 endforeach()
+SbeMakeCodecBundle(${TargetName}
+    PACKAGES ${SchemaPackages}
+    SCHEMAS  ${SchemaFiles}
+    OUTPUT   ${CMAKE_CURRENT_BINARY_DIR}/sbe
+    INCLUDE_BASE turbofw
+    GENERATOR cpp-split
+    SCHEMA_DEPS ${PROJECT_SOURCE_DIR}/schemas/common_types.xml
+)
 
 add_library(${TargetName} STATIC)
 target_compile_features(${TargetName}

@@ -29,7 +29,15 @@ CPMAddPackage("gh:ksergey/turboq#master")
 CPMAddPackage("gh:ksergey/turboq-reactor#master")
 CPMAddPackage("gh:ksergey/turboq-logger#master")
 CPMAddPackage("gh:ksergey/xxx#master")
-CPMAddPackage("gh:ksergey/sbe-code-gen#master")
+
+# turbofw_SBE_CODE_GEN=/path/to/sbe-code-gen points CPM at a local checkout of
+# the generator instead of gh:ksergey/sbe-code-gen#master (local development)
+set(turbofw_SBE_CODE_GEN "" CACHE PATH "Local sbe-code-gen checkout to use instead of gh:ksergey/sbe-code-gen#master")
+if (turbofw_SBE_CODE_GEN)
+    CPMAddPackage(NAME sbe-code-gen SOURCE_DIR ${turbofw_SBE_CODE_GEN})
+else()
+    CPMAddPackage("gh:ksergey/sbe-code-gen#master")
+endif()
 
 if (turbofw_BUILD_TESTS)
     enable_testing()
