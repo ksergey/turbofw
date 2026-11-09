@@ -111,6 +111,74 @@ TEST_SUITE("Algorithm") {
         using L = List<int, char, int, double, void, char>;
         CHECK(std::is_same_v<Unique<L>, List<int, double, void, char>>);
     }
+
+    TEST_CASE("Unique; empty list") {
+        CHECK(std::is_same_v<Unique<List<>>, List<>>);
+    }
+
+    // a never-matching predicate
+    template <typename>
+    using PredNothing = std::bool_constant<false>;
+
+    TEST_CASE("CountIf") {
+        using Objects = List<Object<5>, Object<3>, Object<7>, Object<32>>;
+        CHECK_EQ(CountIf<Objects, PredA>::value, 1);
+        CHECK_EQ(CountIf<Objects, PredB>::value, 0); // nothing matches PredB (== 64), see FindIf
+        CHECK_EQ(CountIf<Objects, PredNothing>::value, 0);
+    }
+
+    // a trait with a non-bool `value`: CountIf normalizes through ToBool, a nonzero value counts
+    struct NonBoolTrait {
+        static constexpr int value = 3;
+    };
+
+    // a predicate whose result is that non-bool trait
+    template <typename>
+    using PredNonBoolTrait = NonBoolTrait;
+
+    TEST_CASE("CountIf normalizes the predicate result to bool") {
+        // the predicate is instantiated for every element, so it must be valid on all of them
+        using L = List<void, double>;
+        CHECK_EQ(CountIf<L, PredNothing>::value, 0);      // int 0 is false
+        CHECK_EQ(CountIf<L, PredNonBoolTrait>::value, 2); // int 3 counts: ToBool normalizes
+    }
+
+    TEST_CASE("CountIf_q") {
+        using Objects = List<Object<5>, Object<3>, Object<7>, Object<32>>;
+        CHECK_EQ(CountIf_q<Objects, Pred<5>>::value, 1);
+        CHECK_EQ(CountIf_q<Objects, Pred<32>>::value, 1);
+        CHECK_EQ(CountIf_q<Objects, Pred<44>>::value, 0);
+    }
+
+    // a mapping metafunction (Transform takes F first)
+    template <typename T>
+    using MapPointer = T*;
+
+    template <std::size_t N>
+    struct ObjectQ {
+        static constexpr std::size_t value = N;
+    };
+
+    // a quoted mapping metafunction (Transform_q takes Q first)
+    struct QuotedMap {
+        template <typename T>
+        using fn = ObjectQ<sizeof(T)>;
+    };
+
+    TEST_CASE("Transform; List") {
+        using L = List<int, char, double>;
+        CHECK((std::is_same_v<Transform<MapPointer, L>, List<int*, char*, double*>>));
+    }
+
+    TEST_CASE("Transform; std::tuple keeps its container form") {
+        using L = std::tuple<int, char>;
+        CHECK((std::is_same_v<Transform<MapPointer, L>, std::tuple<int*, char*>>));
+    }
+
+    TEST_CASE("Transform_q") {
+        using L = List<char, std::int64_t>;
+        CHECK((std::is_same_v<Transform_q<QuotedMap, L>, List<ObjectQ<1>, ObjectQ<8>>>));
+    }
 }
 
 } // namespace turbofw::mp::testing

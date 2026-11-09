@@ -20,6 +20,7 @@
 #include "mixin/SBESendMixin.h"
 #include "mixin/SendMixin.h"
 #include "testing/TestQueue.h"
+#include <turbofw/mp/List.h>
 
 namespace turbofw::testing {
 namespace {
@@ -34,6 +35,24 @@ struct TestConsumer : public testing::Consumer, public mixin::ReceiveMixin {
 
 struct TestSBEProducer : public testing::Producer, public mixin::SBESendMixin {
     using testing::Producer::Producer;
+};
+
+/// A send-hook mixin: stamps `clientId` into every message that carries the field, before the user callback
+/// has its say. Generic over the message type, so it works for both send() overloads.
+struct ClientIdStampMixin {
+    template <typename M>
+    auto updateBody(M msg) -> void {
+        if constexpr (requires { msg.template get<"clientId">(); }) {
+            msg.template get<"clientId">().value(7);
+        }
+    }
+};
+
+/// Producer with the stamping mixin composed into `Mixins`: hook runs on send()
+struct StampingProducer : public testing::Producer, public mixin::SBESendMixin, public ClientIdStampMixin {
+    using testing::Producer::Producer;
+
+    using Mixins = mp::List<ClientIdStampMixin>;
 };
 
 auto const kNoOpReceive = [](std::span<std::byte const>) {
@@ -234,6 +253,63 @@ TEST_SUITE("SBESendMixin") {
         });
         CHECK_EQ(count, 1);
         CHECK_EQ(consumer.receive(kNoOpReceive), 0);
+    }
+
+    TEST_CASE("send hook updateBody(): stamps fields, both send() overloads") {
+        auto queue = testing::Queue{};
+        auto producer = StampingProducer{&queue};
+        auto consumer = TestConsumer{&queue};
+
+        // the fixed-message overload: the hook stamps clientId=7, the user callback leaves it alone -- a
+        // zeroed buffer otherwise, so 7 proves the hook encoded into the buffer
+        auto const fixed = producer.send<svc::Heartbeat>([](svc::Heartbeat msg) {
+            msg.get<"startTs">().value(111);
+            msg.get<"ts">().value(222);
+        });
+        REQUIRE(fixed);
+
+        auto const count = consumer.receive([&](std::span<std::byte const> buffer) {
+            auto const header = svc::MessageHeader{const_cast<std::byte*>(buffer.data())};
+            REQUIRE_EQ(header.get<"templateId">().value(), svc::Heartbeat::sbeTemplateId());
+            auto msg = svc::Heartbeat{std::span<std::byte>{const_cast<std::byte*>(buffer.data()), buffer.size()},
+                header.sbeEncodedLength(), header.get<"blockLength">().value(), header.get<"version">().value()};
+            CHECK_EQ(msg.get<"clientId">().value(), 7u); // stamped by the hook, never touched by the callback
+            CHECK_EQ(msg.get<"startTs">().value(), 111);
+            CHECK_EQ(msg.get<"ts">().value(), 222);
+        });
+        CHECK_EQ(count, 1);
+
+        // the vars overload (repeating groups): the same generic hook still runs
+        auto const groups = producer.send<md::Snapshot>({2u, 1u, 1u}, [](md::Snapshot msg) {
+            auto header = msg.get<"header">();
+            header.get<"instrumentId">().value(42);
+            header.get<"flags">().value(md::MdFlags{}.snapshot(true));
+            auto bids = msg.get<"bids">();
+            bids.reset(2);
+            for (std::int64_t i = 0; bids.hasNext(); ++i) {
+                auto& level = bids.next();
+                level.get<"price">().get<"mantissa">().value(100 - i);
+                level.get<"qty">().value(10 + i);
+                level.get<"orders">().value(1);
+            }
+            auto asks = msg.get<"asks">();
+            asks.reset(1);
+            auto& ask = asks.next();
+            ask.get<"price">().get<"mantissa">().value(101);
+            ask.get<"qty">().value(7);
+            ask.get<"orders">().reset();
+        });
+        REQUIRE(groups);
+
+        auto const snapshotCount = consumer.receive([&](std::span<std::byte const> buffer) {
+            auto const header = md::MessageHeader{const_cast<std::byte*>(buffer.data())};
+            REQUIRE_EQ(header.get<"templateId">().value(), md::Snapshot::sbeTemplateId());
+            auto msg = md::Snapshot{std::span<std::byte>{const_cast<std::byte*>(buffer.data()), buffer.size()},
+                header.sbeEncodedLength(), header.get<"blockLength">().value(), header.get<"version">().value()};
+            CHECK_EQ(msg.get<"clientId">().value(), 7u); // stamped by the hook through the vars overload
+            CHECK_EQ(msg.get<"header">().get<"instrumentId">().value(), 42u);
+        });
+        CHECK_EQ(snapshotCount, 1);
     }
 }
 

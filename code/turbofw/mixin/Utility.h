@@ -15,8 +15,8 @@ namespace turbofw::mixin {
 ///
 /// \code{.cpp}
 /// forEachMixin<Self>([&]<typename Mixin>(std::type_identity<Mixin>) {
-///     if constexpr (requires { self.Mixin::updateSBEBody(msg); }) {
-///         self.Mixin::updateSBEBody(msg);
+///     if constexpr (requires { self.Mixin::updateBody(msg); }) {
+///         self.Mixin::updateBody(msg);
 ///     }
 /// });
 /// \endcode
@@ -30,10 +30,13 @@ namespace turbofw::mixin {
 /// error here -- make mixins a list, not a loose pack of bases.
 template <typename Self, typename Fn>
 constexpr void forEachMixin(Fn&& fn) {
-    if constexpr (requires { typename Self::Mixins; }) {
+    // `Self` may arrive as a reference (deducing-this call sites pass `Self&&`): the `Mixins` lookup is
+    // done on the decayed type, otherwise the requires check silently fails and no mixin is iterated
+    using Decayed = std::remove_cvref_t<Self>;
+    if constexpr (requires { typename Decayed::Mixins; }) {
         [&]<template <typename...> typename L, typename... Ts>(L<Ts...>) {
             (std::invoke(fn, std::type_identity<Ts>{}), ...);
-        }(mp::Rename<typename Self::Mixins, mp::List>{});
+        }(mp::Rename<typename Decayed::Mixins, mp::List>{});
     }
 }
 

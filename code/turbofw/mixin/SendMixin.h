@@ -21,8 +21,8 @@ namespace turbofw::mixin {
 /// `prepare()` itself may throw when the payload exceeds the slot size -- don't catch that either, it is a fatal
 /// misconfiguration, not an ordinary failure.
 ///
-/// The callback follows the hot-path exception rule (see AGENTS.md): it may throw only to signal an unrecoverable,
-/// fatal error. There is no rollback on the exception path: the prepared buffer is left uncommitted, and for an mpsc
+/// The callback follows the hot-path exception rule: it may throw only to signal an unrecoverable, fatal error.
+/// There is no rollback on the exception path: the prepared buffer is left uncommitted, and for an mpsc
 /// queue an uncommitted slot stalls its consumer for good.
 struct SendMixin {
     template <typename Self, typename Fn>

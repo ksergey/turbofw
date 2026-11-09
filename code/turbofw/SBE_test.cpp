@@ -1,6 +1,7 @@
 // Copyright (c) Sergey Kovalevich <inndie@gmail.com>
 // SPDX-License-Identifier: MIT
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <span>
@@ -193,6 +194,64 @@ TEST_SUITE("SBE") {
         };
         CHECK_THROWS((void)turbofw::tryDecodeSBE<mp::List<svc::Heartbeat>>(truncated, impaired));
         CHECK_EQ(calls, 0);
+    }
+
+    TEST_CASE("header overload: dispatch given a pre-decoded header") {
+        auto hbBuffer = std::array<std::byte, kBufferSize>{};
+        auto foreignBuffer = std::array<std::byte, kBufferSize>{};
+        encodeHeartbeat(hbBuffer);
+        encodeSetLogLevel(foreignBuffer); // (schemaId, templateId) not represented in the list below
+
+        using Messages = mp::List<md::Snapshot, trd::CreateContext, svc::Heartbeat>;
+        using Header = turbofw::SBEMessageHeader<Messages>; // one shared header type for the whole list
+
+        auto heartbeatCalls = 0;
+        auto const fn = Overloaded{
+            [&](md::Snapshot) {
+                FAIL("dispatch must pick the type matching the header, not another list entry");
+            },
+            [&](trd::CreateContext) {
+                FAIL("dispatch must pick the type matching the header, not another list entry");
+            },
+            [&](svc::Heartbeat msg) {
+                ++heartbeatCalls;
+                CHECK_EQ(msg.get<"intervalMs">().value(), 500u);
+            },
+        };
+
+        // the acting header decoded once outside: every candidate compares against it without re-reading
+        auto const header = Header{hbBuffer.data()};
+        CHECK(turbofw::tryDecodeSBE<Messages>(std::span<std::byte const>{hbBuffer.data(), hbBuffer.size()}, header, fn));
+        CHECK_EQ(heartbeatCalls, 1);
+
+        // a header with an (schemaId, templateId) pair absent from the list: no match, no callback
+        auto calls = 0;
+        auto const swallow = [&calls](auto&&...) {
+            ++calls;
+        };
+        auto const foreign = Header{foreignBuffer.data()};
+        CHECK_FALSE(turbofw::tryDecodeSBE<Messages>(
+            std::span<std::byte const>{foreignBuffer.data(), foreignBuffer.size()}, foreign, swallow));
+        CHECK_EQ(calls, 0);
+    }
+
+    TEST_CASE("decode never writes to the buffer") {
+        auto buffer = std::array<std::byte, kBufferSize>{};
+        encodeSnapshot(buffer);
+        auto const pristine = buffer;
+
+        auto calls = 0;
+        CHECK(turbofw::tryDecodeSBE<mp::List<md::Snapshot>>(buffer, [&](md::Snapshot msg) {
+            ++calls;
+            CHECK_EQ(msg.get<"header">().get<"instrumentId">().value(), 42u);
+            auto bids = msg.get<"bids">();
+            CHECK_EQ(bids.count(), 2);
+            bids.next();
+            bids.next();
+        }));
+        REQUIRE_EQ(calls, 1);
+        // byte-identical after a full decode: decode is a pure view over the caller's buffer
+        CHECK(std::equal(buffer.begin(), buffer.end(), pristine.begin(), pristine.end()));
     }
 }
 

@@ -40,12 +40,14 @@ namespace turbofw::mixin {
 ///
 /// The message's group entries and var-data fields must be sized in `M::SizeHint` units: an entry count per
 /// repeating group, a byte length per data field (see the generated `sbeComputeSize()`). Passing a hint smaller
-/// than what the callback actually encodes makes the encode throw: per the hot-path exception rule (see
-/// AGENTS.md), that is a fatal encoding bug, not a recoverable failure.
+/// than what the callback actually encodes makes the encode throw: that is a fatal encoding bug, not a
+/// recoverable failure -- per the hot-path exception rule, fixed size = fatal error, never a return value.
 ///
-/// The callback receives the message by copy (see the SBE message objects rule in AGENTS.md): field and group
-/// writes through the copy mutate the underlying buffer exactly the same way, so the encoding result is not
-/// affected either way.
+/// The callback receives the message by copy: SBE message objects are lightweight non-owning views (~40 bytes) over
+/// the queue buffer, encoding through one copy mutates the underlying buffer exactly like any other, and only that
+/// copy's position cursor moves -- so what the callback writes is what gets published either way, and writes never
+/// escape the view. (References and const objects are not passing options: the generated getters are non-const
+/// members, a const message view does not compile.)
 ///
 /// If no buffer is available, returns `ENOBUFS` without touching the callback. Note that for an mpsc producer
 /// `prepare()` itself throws when the computed size exceeds the slot size -- don't catch that either, it is a
@@ -56,7 +58,7 @@ namespace turbofw::mixin {
 struct SBESendMixin {
     template <typename M, typename Self, typename Fn>
         requires SBEMessage<M> && SBEMessageWithVars<M> && turboq::Producer<std::remove_cvref_t<Self>> &&
-                     std::invocable<Fn&, M&>
+                 std::invocable<Fn&, M&>
     auto send(this Self&& self, typename M::SizeHint hint, Fn&& fn) -> std::expected<void, std::error_code> {
         auto const bufferSize = M::Header::sbeEncodedLength() + M::sbeComputeSize(hint);
         auto const buffer = self.prepare(bufferSize);
@@ -68,11 +70,11 @@ struct SBESendMixin {
 
         // Mixin hooks: stamp common fields into the message buffer before the user callback has its say.
         // Invoked in `Self::Mixins` list order, skipped for mixins without the method (see forEachMixin).
-        // Messages pass by value (the SBE message objects rule in AGENTS.md), so hooks run one after another
+        // Messages pass by value (SBE message objects are lightweight views), so hooks run one after another
         // with independent position cursors over the same buffer.
         forEachMixin<Self>([&]<typename Mixin>(std::type_identity<Mixin>) {
-            if constexpr (requires { self.Mixin::updateSBEBody(msg); }) {
-                self.Mixin::updateSBEBody(msg);
+            if constexpr (requires { self.Mixin::updateBody(msg); }) {
+                self.Mixin::updateBody(msg);
             }
         });
 
@@ -83,8 +85,8 @@ struct SBESendMixin {
     }
 
     template <typename M, typename Self, typename Fn>
-        requires SBEMessage<M> &&
-                     (!SBEMessageWithVars<M>) && turboq::Producer<std::remove_cvref_t<Self>> && std::invocable<Fn&, M&>
+        requires SBEMessage<M> && (!SBEMessageWithVars<M>) && turboq::Producer<std::remove_cvref_t<Self>> &&
+                 std::invocable<Fn&, M&>
     auto send(this Self&& self, Fn&& fn) -> std::expected<void, std::error_code> {
         constexpr auto bufferSize = M::Header::sbeEncodedLength() + M::sbeComputeSize();
         auto const buffer = self.prepare(bufferSize);
