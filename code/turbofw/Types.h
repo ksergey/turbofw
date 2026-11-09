@@ -10,9 +10,8 @@
 
 namespace turbofw {
 
-// Semantic alias over the wire type the schema assigns to the field: the raw type is pulled from the schema
-// itself (`SBEFieldValueOf`), so schema changes keep the alias in sync instead of drifting from it.
-struct ServiceIdTag {};
-using ServiceId = strong::type<SBEFieldValueOf<svc::Heartbeat, "serviceId">, ServiceIdTag, strong::regular>;
+using ServiceId = strong::type<SBEFieldValueOf<svc::Heartbeat, "serviceId">, struct ServiceId_Tag, strong::regular>;
+using ClientId = strong::type<SBEFieldValueOf<svc::Heartbeat, "clientId">, struct ClientId_Tag, strong::regular>;
+using RequestId = strong::type<SBEFieldValueOf<svc::Heartbeat, "requestId">, struct RequestId_Tag, strong::regular>;
 
 } // namespace turbofw
