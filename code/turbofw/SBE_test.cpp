@@ -221,7 +221,8 @@ TEST_SUITE("SBE") {
 
         // the acting header decoded once outside: every candidate compares against it without re-reading
         auto const header = Header{hbBuffer.data()};
-        CHECK(turbofw::tryDecodeSBE<Messages>(std::span<std::byte const>{hbBuffer.data(), hbBuffer.size()}, header, fn));
+        CHECK(
+            turbofw::tryDecodeSBE<Messages>(std::span<std::byte const>{hbBuffer.data(), hbBuffer.size()}, header, fn));
         CHECK_EQ(heartbeatCalls, 1);
 
         // a header with an (schemaId, templateId) pair absent from the list: no match, no callback
@@ -252,6 +253,34 @@ TEST_SUITE("SBE") {
         REQUIRE_EQ(calls, 1);
         // byte-identical after a full decode: decode is a pure view over the caller's buffer
         CHECK(std::equal(buffer.begin(), buffer.end(), pristine.begin(), pristine.end()));
+    }
+}
+
+TEST_SUITE("SBE field type") {
+    TEST_CASE("field value type matches the wire type behind the schema field") {
+        // plain scalar
+        static_assert(std::is_same_v<turbofw::SBEFieldOf<svc::Heartbeat, "serviceId">, svc::Heartbeat::ServiceIdRef>);
+        static_assert(std::is_same_v<turbofw::SBEFieldValueOf<svc::Heartbeat, "serviceId">, std::uint16_t>);
+
+        // optional composite: the composite class itself, as types.h re-exports it
+        static_assert(std::is_same_v<turbofw::SBEFieldValueOf<md::MbpUpdate, "price">, md::Price9NULL>);
+
+        // enum and set fields: the enum/set class
+        static_assert(std::is_same_v<turbofw::SBEFieldValueOf<trd::NewOrder, "side">, trd::OrderSide>);
+        static_assert(std::is_same_v<turbofw::SBEFieldValueOf<trd::NewOrder, "flags">, trd::OrderFlags>);
+
+        CHECK(true);
+    }
+
+    TEST_CASE("SBEHasField: ordinary fields are, groups and unknown names are not") {
+        static_assert(turbofw::SBEHasField<svc::Heartbeat, "serviceId">);
+        static_assert(turbofw::SBEHasField<md::MbpUpdate, "price">);
+        // MbpUpdate.bids is a repeating group ref: named, but valueless
+        static_assert(!turbofw::SBEHasField<md::MbpUpdate, "bids">);
+        static_assert(!turbofw::SBEHasField<md::MbpUpdate, "noSuchField">);
+        static_assert(!turbofw::SBEHasField<int, "anything">);
+
+        CHECK(true);
     }
 }
 

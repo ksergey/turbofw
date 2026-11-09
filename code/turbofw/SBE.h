@@ -6,9 +6,11 @@
 #include <cstdint>
 #include <functional>
 #include <span>
+#include <string_view>
 #include <type_traits>
 #include <utility>
 
+#include "CtString.h"
 #include "mp/Algorithm.h"
 #include "mp/List.h"
 
@@ -53,6 +55,51 @@ concept UniformHeader = mp::IsList<L>::value && (mp::Size<mp::Unique<mp::Transfo
 template <typename L>
     requires detail::UniformHeader<L>
 using SBEMessageHeader = typename mp::Front<L>::Header;
+
+namespace detail {
+
+/// `Fields` of the generated message M: the named per-field ref types in schema order
+template <typename M>
+using MessageFields = typename M::Fields;
+
+/// The field ref named N: matches `sbeRefName()`. Well-formed for every Fields element -- group and data refs
+/// are named too (they simply carry no ValueType, see `SBEHasField` for the gate).
+template <CtString N>
+struct FieldNamed {
+    template <typename Ref>
+    struct fn : std::bool_constant<std::string_view{Ref::sbeRefName()} == static_cast<std::string_view>(N)> {};
+};
+
+} // namespace detail
+
+/// The field ref of the generated SBE message M named N: `SBEFieldOf<svc::Heartbeat, "serviceId">` is
+/// `svc::Heartbeat::ServiceIdRef`. The search runs over `M::Fields` (schema field order), the name argument is
+/// a `turbofw::CtString` string literal. Group and data fields are found as well (their refs carry no
+/// ValueType though). An unknown name is a hard compile error, not a concept failure -- use `SBEHasField` for
+/// the soft check.
+template <typename M, CtString N>
+using SBEFieldOf = typename mp::At<detail::MessageFields<M>,
+    typename mp::FindIf<detail::MessageFields<M>, detail::FieldNamed<N>::template fn>::type>::type;
+
+/// The value type of the field N of the generated SBE message M, as its ref carries it: a primitive encoded
+/// type for plain fields (`std::uint16_t`, an optional wrapper type like `InstrumentIdNULL`), the enum/set
+/// class for enum and set fields, and the composite class for composite fields (`Price9NULL`). Corresponds
+/// one-to-one to the type the schema puts behind the field in the generated `types.h`/fragment headers.
+///
+/// Only value-carrying fields: for group and data fields the concept `SBEHasField` is false and the alias is
+/// a compile error.
+template <typename M, CtString N>
+using SBEFieldValueOf = typename SBEFieldOf<M, N>::ValueType;
+
+/// Checks M is a generated SBE message with a value-carrying field named N: the field ref exists (search over
+/// `M::Fields`, see `SBEFieldOf`) and carries a `ValueType` -- group and data fields count as absent. M without
+/// a `Fields` list counts as false. Unlike `SBEFieldOf` itself this is the soft form: fold it in via
+/// `if constexpr` / `requires` instead of instantiating the aliases directly on an unverified name.
+template <typename M, CtString N>
+concept SBEHasField = SBEMessage<M> && requires { typename detail::MessageFields<M>; } &&
+                      (mp::FindIf<detail::MessageFields<M>, detail::FieldNamed<N>::template fn>::value <
+                          mp::Size<detail::MessageFields<M>>::value) &&
+                      requires { typename SBEFieldOf<M, N>::ValueType; };
 
 /// Demultiplexes an SBE message buffer: tries every message type of the list L against the header, the first
 /// one whose (schemaId, templateId) pair matches is decoded and passed to `fn`; returns whether any did.

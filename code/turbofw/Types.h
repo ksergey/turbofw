@@ -5,11 +5,14 @@
 
 #include <strong_type/strong_type.hpp>
 
+#include <turbofw/SBE.h>
 #include <turbofw/svc/Heartbeat.h>
 
 namespace turbofw {
 
-// FIXME: how to obtain type from schema (i.e. heartbeat message)?
-using ServiceId = strong::type<std::uint32_t, struct ServiceId, strong::regular>;
+// Semantic alias over the wire type the schema assigns to the field: the raw type is pulled from the schema
+// itself (`SBEFieldValueOf`), so schema changes keep the alias in sync instead of drifting from it.
+struct ServiceIdTag {};
+using ServiceId = strong::type<SBEFieldValueOf<svc::Heartbeat, "serviceId">, ServiceIdTag, strong::regular>;
 
 } // namespace turbofw
