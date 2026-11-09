@@ -12,11 +12,17 @@
 
 namespace turbofw::mp {
 
-/// Returns SizeT<N>, where N is the number of elements of L same as V
-template <typename L, typename V>
-struct Count;
-template <template <typename...> typename L, typename... Ts, typename V>
-struct Count<L<Ts...>, V> : SizeT<(0u + ... + (std::is_same<Ts, V>::value ? 1u : 0u))> {};
+namespace detail {
+
+/// The exact-type-match predicate quoted the `fn`-way (as in `CountIf_q`/`FindIf_q`/`Transform_q`): the shared
+/// engine behind the value-shaped `Count` and `Find` aliases
+template <typename V>
+struct SameAs {
+    template <typename T>
+    using fn = std::is_same<T, V>;
+};
+
+} // namespace detail
 
 /// Returns SizeT<N>, where N is the number of elements T of L for which P<T> is true_type
 template <typename L, template <typename...> typename P>
@@ -27,6 +33,10 @@ struct CountIf<L<Ts...>, P> : SizeT<(0u + ... + (ToBool<P<Ts>>::value ? 1u : 0u)
 /// CountIf with a quoted metafunction
 template <typename L, typename Q>
 using CountIf_q = CountIf<L, Q::template fn>;
+
+/// Count = CountIf over the sameness predicate: SizeT<N>, where N is the number of elements of L same as V
+template <typename L, typename V>
+using Count = CountIf<L, detail::SameAs<V>::template fn>;
 
 /// std::true_type when L contains an element V, std::false_type otherwise
 template <typename L, typename V>
@@ -47,26 +57,11 @@ struct At<L<Ts...>, N> : std::tuple_element<N::value, std::tuple<Ts...>> {};
 template <typename L, std::size_t I>
 using At_c = typename At<L, SizeT<I>>::type;
 
-/// Returns the index of the first occurrence of V in L as a `SizeT` constant (`-> ::value`); a type absent
-/// from L yields `Size<L>` -- the mp-convention for "not found"
-template <typename L, typename V>
-struct Find;
-template <template <typename...> typename L, typename... Ts, typename V>
-struct Find<L<Ts...>, V> : SizeT<[]() -> std::size_t {
-    constexpr auto match = std::array{std::is_same<V, Ts>::value...};
-    std::size_t index = 0;
-    for (; index < sizeof...(Ts); ++index) {
-        if (match[index]) {
-            break;
-        }
-    }
-    return index;
-}()> {};
-
 /// Returns the index of the first element of L matching P as a `SizeT` constant (`-> ::value`); a list without
 /// a match yields `Size<L>` -- the mp-convention for "not found".
 ///
 /// The predicate must be well-formed for every element of L: `ToBool<P<Ts>>...` instantiates the whole match
+
 /// array at once, unlike mp11's lazy `mp_defer`, which tolerates predicates invalid on some elements.
 template <typename L, template <typename...> typename P>
 struct FindIf;
@@ -86,6 +81,11 @@ struct FindIf<L<Ts...>, P> : SizeT<[]() -> std::size_t {
 /// element type
 template <typename L, typename Q>
 using FindIf_q = FindIf<L, Q::template fn>;
+
+/// Find = FindIf over the sameness predicate: the index of the first occurrence of V in L as a `SizeT`
+/// constant (`-> ::value`); a type absent from L yields `Size<L>` -- the mp-convention for "not found"
+template <typename L, typename V>
+using Find = FindIf<L, detail::SameAs<V>::template fn>;
 
 namespace detail {
 
@@ -119,16 +119,19 @@ public:
 template <typename L>
 using Unique = detail::UniqueImpl<L>::type;
 
-namespace detail {
-
-/// mp11 mp_defer-style lazy application: the metafunction application is delayed into the element expansion,
-/// so an invalid `F<Ts>` surfaces at the element that failed it, not deep inside the pack stretch
+/// mp_defer-style lazy application: delays the `F<Ts...>` instantiation into a struct of its own, so the
+/// application happens at one well-defined point (the `::type`) and an invalid `F` surfaces with the failed
+/// element, not deep inside a pack stretch. The engine of `Transform`; also usable on its own.
 template <template <typename...> typename F, typename... Ts>
 struct DeferImpl {
     using type = F<Ts...>;
 };
+
+/// The direct-result form of \ref DeferImpl: `Defer<F, Ts...>` is `F<Ts...>`, evaluated at one point
 template <template <typename...> typename F, typename... Ts>
 using Defer = typename DeferImpl<F, Ts...>::type;
+
+namespace detail {
 
 /// The mp11 mp_transform shape: an empty list short-circuits to itself (nothing instantiated), every other
 /// list maps element-wise through F while the container form (`mp::List`, `std::tuple`, ...) is preserved.

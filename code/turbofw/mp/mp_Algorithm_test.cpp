@@ -184,6 +184,20 @@ TEST_SUITE("Algorithm") {
         using L = List<char, std::int64_t>;
         CHECK((std::is_same_v<Transform_q<QuotedMap, L>, List<ObjectQ<1>, ObjectQ<8>>>));
     }
+
+    TEST_CASE("Defer; public mp_defer-style application") {
+        CHECK(std::is_same_v<Defer<MapPointer, std::int64_t>, std::int64_t*>);
+        // a mapping that takes the elements as a pack
+        CHECK(std::is_same_v<Defer<List, void, double>, List<void, double>>);
+    }
+
+    TEST_CASE("Count and Find are FindIf/CountIf over the sameness predicate") {
+        using Types = List<int, double, char, float>;
+        // turbofw::mp::detail::SameAs is the shared engine: value-shaped Count/Find must be exactly the
+        // engine re-wrapped, so either type comparison holds
+        CHECK((std::is_same_v<CountIf<Types, detail::SameAs<char>::template fn>, Count<Types, char>>));
+        CHECK((std::is_same_v<FindIf<Types, detail::SameAs<char>::template fn>, Find<Types, char>>));
+    }
 }
 
 } // namespace turbofw::mp::testing
