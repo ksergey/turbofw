@@ -36,21 +36,22 @@ concept SBEMessageWithVars = requires { typename M::SizeHint; } && (std::tuple_s
 namespace detail {
 
 template <typename M>
-using SBEHeaderOf = typename M::Header;
+using MessageHeaderOf = typename M::Header;
 
+/// Uniform header across the list L: every message of L carries one and the same generated MessageHeader --
+/// as all messages of one schema do. The gate of `SBEMessageHeader` and both `tryDecodeSBE` overloads.
 template <typename L>
-inline constexpr auto isTheSameMessageHeader =
-    mp::IsList<L>::value && (mp::Size<mp::Unique<mp::Transform<detail::SBEHeaderOf, L>>>::value == 1);
+concept UniformHeader = mp::IsList<L>::value && (mp::Size<mp::Unique<mp::Transform<MessageHeaderOf, L>>>::value == 1);
 
 } // namespace detail
 
-/// The MessageHeader type shared by every message of the list L: `Front`-style alias, available as long as all
-/// elements of L carry the same generated header (all messages of one schema do; mixing md and svc is legal
+/// The generated MessageHeader shared by every message of the list L: `Front`-style alias, available as long
+/// as all elements of L carry the same generated header (`detail::UniformHeader`; md and svc mix legally
 /// because both include the very same common_types.xml header and the bundle generation makes it a single C++
-/// type; mixing trd with an older schema version is not). A type without a `Header` alias in L is a hard
-/// compile error, not a concept failure -- SBE lists are written by hand, that is an acceptable price.
+/// type). A type without a `Header` alias in L is a hard compile error, not a concept failure -- SBE lists
+/// are written by hand, that is an acceptable price.
 template <typename L>
-    requires detail::isTheSameMessageHeader<L>
+    requires detail::UniformHeader<L>
 using SBEMessageHeader = typename mp::Front<L>::Header;
 
 /// Demultiplexes an SBE message buffer: tries every message type of the list L against the header, the first
@@ -79,7 +80,7 @@ using SBEMessageHeader = typename mp::Front<L>::Header;
 /// acting block length makes the generated decode throw on field access: per the hot-path exception rule, treat
 /// it as fatal rather than a recoverable failure.
 template <typename L, typename Fn>
-    requires detail::isTheSameMessageHeader<L>
+    requires detail::UniformHeader<L>
 constexpr auto tryDecodeSBE(std::span<std::byte const> buffer, SBEMessageHeader<L> const& header, Fn&& fn) -> bool {
     return [&]<template <typename...> typename List, typename... Ts>(List<Ts...>)
         requires(SBEMessage<Ts> && ...) && (std::invocable<Fn&, Ts> && ...)
@@ -106,10 +107,10 @@ constexpr auto tryDecodeSBE(std::span<std::byte const> buffer, SBEMessageHeader<
 /// header-taking overload above. Buffers too short to carry the MessageHeader yield false without a callback
 /// invocation (guard per call, a short-buffer body is not fatal by itself: nothing beyond the header is read).
 template <typename L, typename Fn>
-    requires detail::isTheSameMessageHeader<L>
+    requires detail::UniformHeader<L>
 constexpr auto tryDecodeSBE(std::span<std::byte const> buffer, Fn&& fn) -> bool {
     // Messages in list L have the same MessageHeader, so decode header once
-    using Header = typename mp::Front<L>::Header;
+    using Header = SBEMessageHeader<L>;
 
     if (buffer.size() < Header::sbeEncodedLength()) [[unlikely]] {
         return false;
