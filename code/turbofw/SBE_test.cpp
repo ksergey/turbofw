@@ -80,52 +80,6 @@ auto encodeSetLogLevel(std::span<std::byte> buffer) -> void {
 } // namespace
 
 TEST_SUITE("SBE") {
-    TEST_CASE("tryDecodeSBEFor: direct matching of a single message type") {
-        auto buffer = std::array<std::byte, kBufferSize>{};
-        encodeHeartbeat(buffer);
-        auto const view = std::span<std::byte const>{buffer.data(), buffer.size()};
-
-        auto heartbeat = 0;
-        CHECK(turbofw::tryDecodeSBEFor<svc::Heartbeat>(view, [&](svc::Heartbeat) {
-            ++heartbeat;
-        }));
-        CHECK_EQ(heartbeat, 1);
-
-        // a decode must not write to the buffer: the header stays intact for later reads
-        auto setLogLevel = 0;
-        CHECK_FALSE(turbofw::tryDecodeSBEFor<svc::SetLogLevel>(view, [&](svc::SetLogLevel) {
-            ++setLogLevel;
-        }));
-        CHECK_EQ(setLogLevel, 0);
-
-        // shorter than a MessageHeader: nothing to match, no callback call
-        CHECK_FALSE(
-            turbofw::tryDecodeSBEFor<svc::Heartbeat>(std::span<std::byte const>{buffer.data(), 4}, [&](svc::Heartbeat) {
-                ++heartbeat;
-            }));
-        CHECK_EQ(heartbeat, 1);
-    }
-
-    TEST_CASE("one message type: decode round trip") {
-        auto buffer = std::array<std::byte, kBufferSize>{};
-        encodeHeartbeat(buffer);
-
-        auto calls = 0;
-        auto const result = turbofw::tryDecodeSBE<mp::List<svc::Heartbeat>>(buffer, [&](svc::Heartbeat msg) {
-            ++calls;
-            CHECK_EQ(msg.get<"clientId">().value(), 17u);
-            CHECK_EQ(msg.get<"requestId">().value(), 3u);
-            CHECK_EQ(msg.get<"serviceId">().value(), 1u);
-            CHECK_EQ(msg.get<"startTs">().value(), 111);
-            CHECK_EQ(msg.get<"ts">().value(), 222);
-            CHECK_EQ(msg.get<"intervalMs">().value(), 500u);
-            auto flags = msg.get<"flags">().value();
-            CHECK(flags.start());
-        });
-        REQUIRE(result);
-        CHECK_EQ(calls, 1);
-    }
-
     TEST_CASE("multi-schema list: every type decodes and dispatches to its own overload") {
         auto hbBuffer = std::array<std::byte, kBufferSize>{};
         auto snapshotBuffer = std::array<std::byte, kBufferSize>{};

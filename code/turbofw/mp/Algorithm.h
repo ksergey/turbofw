@@ -8,8 +8,29 @@
 #include <type_traits>
 
 #include "Integral.h"
+#include "List.h"
 
 namespace turbofw::mp {
+
+/// Returns SizeT<N>, where N is the number of elements of L same as V
+template <typename L, typename V>
+struct Count;
+template <template <typename...> typename L, typename... Ts, typename V>
+struct Count<L<Ts...>, V> : SizeT<(0u + ... + (std::is_same<Ts, V>::value ? 1u : 0u))> {};
+
+/// Returns SizeT<N>, where N is the number of elements T of L for which P<T> is true_type
+template <typename L, template <typename...> typename P>
+struct CountIf;
+template <template <typename...> typename L, typename... Ts, template <typename...> typename P>
+struct CountIf<L<Ts...>, P> : SizeT<(0u + ... + (ToBool<P<Ts>>::value ? 1u : 0u))> {};
+
+/// CountIf with a quoted metafunction
+template <typename L, typename Q>
+using CountIf_q = CountIf<L, Q::template fn>;
+
+/// std::true_type when L contains an element V, std::false_type otherwise
+template <typename L, typename V>
+using Contains = ToBool<Count<L, V>>;
 
 /// Returns the `N::value`-th element of L (`N` is an integral constant type, see `SizeT`; `At_c` is the sugar
 /// for a plain `std::size_t` index). The element is exposed as the nested `type`.
@@ -65,5 +86,54 @@ struct FindIf<L<Ts...>, P> : SizeT<[]() -> std::size_t {
 /// element type
 template <typename L, typename Q>
 using FindIf_q = FindIf<L, Q::template fn>;
+
+namespace detail {
+
+template <typename L>
+struct UniqueImpl;
+template <typename L>
+    requires(Size<L>::value == 0)
+struct UniqueImpl<L> {
+    using type = Clear<L>;
+};
+template <typename L>
+    requires(Size<L>::value > 0)
+struct UniqueImpl<L> {
+private:
+    using T = First<L>;
+    using RestList = typename UniqueImpl<Rest<L>>::type;
+
+public:
+    // clang-format off
+    using type = std::conditional_t<
+        Contains<RestList, T>::value,
+        RestList,
+        PushFront<RestList, T>
+    >;
+    // clang-format on
+};
+
+} // namespace detail
+
+/// Returns a list of the same form as \c L with the duplicate elements removed
+template <typename L>
+using Unique = detail::UniqueImpl<L>::type;
+
+namespace detail {
+
+template <template <typename...> typename F, typename L>
+struct TransformImpl;
+template <template <typename...> typename F, template <typename...> typename L, typename... Ts>
+struct TransformImpl<F, L<Ts...>> {
+    using type = L<F<Ts>...>;
+};
+
+} // namespace detail
+
+template <template <typename...> typename F, typename L>
+using Transform = typename detail::TransformImpl<F, L>::type;
+
+template <typename Q, typename L>
+using Transform_q = typename detail::TransformImpl<Q::template fn, L>::type;
 
 } // namespace turbofw::mp

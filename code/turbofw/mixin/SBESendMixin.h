@@ -96,8 +96,8 @@ struct SBESendMixin {
 
         // Mixin hooks: see the send overload above
         forEachMixin<Self>([&]<typename Mixin>(std::type_identity<Mixin>) {
-            if constexpr (requires { self.Mixin::updateSBEBody(msg); }) {
-                self.Mixin::updateSBEBody(msg);
+            if constexpr (requires { self.Mixin::updateBody(msg); }) {
+                self.Mixin::updateBody(msg);
             }
         });
 

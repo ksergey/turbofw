@@ -9,6 +9,7 @@
 #include <type_traits>
 #include <utility>
 
+#include "mp/Algorithm.h"
 #include "mp/List.h"
 
 namespace turbofw {
@@ -32,67 +33,57 @@ concept SBEMessage = requires(std::span<std::byte> buffer) {
 template <typename M>
 concept SBEMessageWithVars = requires { typename M::SizeHint; } && (std::tuple_size_v<typename M::SizeHint> != 0);
 
-/// Matches the message type M against the SBE MessageHeader found at the start of `buffer`: if the (schemaId,
-/// templateId) pair agrees, decodes the message and passes it to `fn`, returns true. Otherwise returns false
-/// without touching `fn`.
-///
-/// The acting `blockLength` and `version` come from the header, not from `M`'s constants, so the decoded message
-/// reads its fields with the encoder's acting layout. If `buffer` is too short to hold the MessageHeader, there
-/// is nothing to match against: returns false rather than reading past the end.
-///
-/// The decoded message is passed to the callback by copy (see the SBE message objects rule in AGENTS.md):
-/// SBE message objects are lightweight non-owning views over the caller's buffer, and decode never mutates it.
-template <typename M, typename Fn>
-    requires SBEMessage<M> && std::invocable<Fn, M>
-constexpr auto tryDecodeSBEFor(std::span<std::byte const> buffer, Fn&& fn) -> bool {
-    using Header = typename M::Header;
-    if (buffer.size() < Header::sbeEncodedLength()) {
-        return false;
-    }
+namespace detail {
 
-    // The generated header needs a mutable pointer, hence the const_cast: decode never writes to the buffer.
-    auto const bufferMutable = std::span{const_cast<std::byte*>(buffer.data()), buffer.size()};
-    auto const header = Header{bufferMutable.data()};
-    if (header.template get<"schemaId">().value() != M::sbeSchemaId() ||
-        header.template get<"templateId">().value() != M::sbeTemplateId()) {
-        return false;
-    }
+template <typename M>
+using SBEHeaderOf = typename M::Header;
 
-    auto const msg = M{bufferMutable, header.sbeEncodedLength(), header.template get<"blockLength">().value(),
-        header.template get<"version">().value()};
-    std::invoke(std::forward<Fn>(fn), msg);
+template <typename L>
+inline constexpr auto isTheSameMessageHeader =
+    mp::IsList<L>::value && (mp::Size<mp::Unique<mp::Transform<detail::SBEHeaderOf, L>>>::value == 1);
 
-    return true;
-}
+} // namespace detail
 
-/// Demultiplexes an SBE message buffer: tries every type of the list L, the first one whose (schemaId,
-/// templateId) pair matches the buffer's MessageHeader is decoded and passed to `fn`; returns whether any did.
-///
-/// \code{.cpp}
-/// auto const buffer = consumer.fetch().value();
-/// if (turbofw::tryDecodeSBE<md::Messages>(buffer, Overloaded{
-///         [](md::MbpUpdate msg) { /* hot path */
-///         },
-///         [](md::Snapshot msg) { /* ... */
-///         }}).value();
-/// \endcode
-///
-/// The buffer must carry a MessageHeader, and `fn` must accept every message type of L as a by-copy argument
-/// (see the SBE message objects rule in AGENTS.md): overload sets and generic lambdas both work. Decode reads
-/// the buffer only, the callback receives a lightweight view over it.
-///
-/// A buffer too small to hold the MessageHeader (guard per candidate, see `tryDecodeSBEFor`), or holding an
-/// (schemaId, templateId) pair absent from L, yields false without a callback invocation. A body shorter than
-/// the acting block length makes the generated decode throw on field access: per the hot-path exception rule
-/// (AGENTS.md), treat it as a fatal error rather than a recoverable one.
+/// Get common message header type from SBE messages list
+template <typename L>
+    requires detail::isTheSameMessageHeader<L>
+using SBEMessageHeader = typename mp::Front<L>::Header;
+
 template <typename L, typename Fn>
-    requires mp::IsList<L>::value
-constexpr auto tryDecodeSBE(std::span<std::byte const> buffer, Fn&& fn) -> bool {
+    requires detail::isTheSameMessageHeader<L>
+constexpr auto tryDecodeSBE(std::span<std::byte const> buffer, SBEMessageHeader<L> const& header, Fn&& fn) -> bool {
     return [&]<template <typename...> typename List, typename... Ts>(List<Ts...>)
         requires(SBEMessage<Ts> && ...) && (std::invocable<Fn&, Ts> && ...)
     {
-        return (tryDecodeSBEFor<Ts>(buffer, fn) || ...);
+        return ([&]() -> bool {
+            if (header.template get<"schemaId">().value() != Ts::sbeSchemaId() ||
+                header.template get<"templateId">().value() != Ts::sbeTemplateId()) {
+                return false;
+            }
+
+            auto const bufferMutable = std::span{const_cast<std::byte*>(buffer.data()), buffer.size()};
+            auto const msg = Ts{bufferMutable, header.sbeEncodedLength(), header.template get<"blockLength">().value(),
+                header.template get<"version">().value()};
+            std::invoke(std::forward<Fn>(fn), msg);
+
+            return true;
+        }() || ...);
     }(L{});
+}
+
+template <typename L, typename Fn>
+    requires detail::isTheSameMessageHeader<L>
+constexpr auto tryDecodeSBE(std::span<std::byte const> buffer, Fn&& fn) -> bool {
+    // Messages in list L have the same MessageHeader, so decode header once
+    using Header = typename mp::First<L>::Header;
+
+    if (buffer.size() < Header::sbeEncodedLength()) [[unlikely]] {
+        return false;
+    }
+
+    auto const bufferMutable = std::span{const_cast<std::byte*>(buffer.data()), buffer.size()};
+    auto const header = Header{bufferMutable.data()};
+    return tryDecodeSBE<L, Fn>(buffer, header, std::forward<Fn>(fn));
 }
 
 } // namespace turbofw

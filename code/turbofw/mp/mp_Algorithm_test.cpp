@@ -11,6 +11,26 @@
 namespace turbofw::mp::testing {
 
 TEST_SUITE("Algorithm") {
+
+    TEST_CASE("Count") {
+        using L = List<int, char, double, char, void>;
+        CHECK_EQ(Count<L, int>::value, 1);
+        CHECK_EQ(Count<L, char>::value, 2);
+        CHECK_EQ(Count<L, double>::value, 1);
+        CHECK_EQ(Count<L, void>::value, 1);
+        CHECK_EQ(Count<L, float>::value, 0);
+    }
+
+    TEST_CASE("Contains") {
+        using L = List<int, char, double, char, void>;
+        CHECK(Contains<L, int>::value);
+        CHECK(Contains<L, char>::value);
+        CHECK(Contains<L, double>::value);
+        CHECK(Contains<L, void>::value);
+        CHECK(!Contains<L, float>::value);
+        CHECK(!Contains<L, char*>::value);
+    }
+
     TEST_CASE("At; List") {
         using Types = List<int, double, char, float>;
         CHECK(std::is_same_v<At<Types, SizeT<0>>::type, int>);
@@ -85,6 +105,11 @@ TEST_SUITE("Algorithm") {
         CHECK_EQ(FindIf_q<Objects, Pred<32>>::value, 3);
         CHECK_EQ(FindIf_q<Objects, Pred<44>>::value, 4);
         CHECK_EQ(FindIf_q<Objects, Pred<4>>::value, 4);
+    }
+
+    TEST_CASE("Unique") {
+        using L = List<int, char, int, double, void, char>;
+        CHECK(std::is_same_v<Unique<L>, List<int, double, void, char>>);
     }
 }
 
