@@ -121,18 +121,40 @@ using Unique = detail::UniqueImpl<L>::type;
 
 namespace detail {
 
+/// mp11 mp_defer-style lazy application: the metafunction application is delayed into the element expansion,
+/// so an invalid `F<Ts>` surfaces at the element that failed it, not deep inside the pack stretch
+template <template <typename...> typename F, typename... Ts>
+struct DeferImpl {
+    using type = F<Ts...>;
+};
+template <template <typename...> typename F, typename... Ts>
+using Defer = typename DeferImpl<F, Ts...>::type;
+
+/// The mp11 mp_transform shape: an empty list short-circuits to itself (nothing instantiated), every other
+/// list maps element-wise through F while the container form (`mp::List`, `std::tuple`, ...) is preserved.
 template <template <typename...> typename F, typename L>
 struct TransformImpl;
+
+template <template <typename...> typename F, template <typename...> typename L>
+struct TransformImpl<F, L<>> {
+    using type = L<>;
+};
+
 template <template <typename...> typename F, template <typename...> typename L, typename... Ts>
 struct TransformImpl<F, L<Ts...>> {
-    using type = L<F<Ts>...>;
+    using type = L<Defer<F, Ts>...>;
 };
+
+template <template <typename...> typename F, typename L>
+using TransformImplAlias = typename TransformImpl<F, L>::type;
 
 } // namespace detail
 
 template <template <typename...> typename F, typename L>
-using Transform = typename detail::TransformImpl<F, L>::type;
+using Transform = detail::TransformImplAlias<F, L>;
 
+/// The quoted variant: Q must define `template <typename...> using fn`; it binds to the same dispatch point
+/// as mp11's quoted transform (mp_transform_q over mp_transform)
 template <typename Q, typename L>
 using Transform_q = typename detail::TransformImpl<Q::template fn, L>::type;
 

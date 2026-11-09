@@ -170,6 +170,11 @@ TEST_SUITE("Algorithm") {
         CHECK((std::is_same_v<Transform<MapPointer, L>, List<int*, char*, double*>>));
     }
 
+    TEST_CASE("Transform; empty list short-circuits, form preserved") {
+        CHECK(std::is_same_v<Transform<MapPointer, List<>>, List<>>);
+        CHECK(std::is_same_v<Transform<MapPointer, std::tuple<>>, std::tuple<>>);
+    }
+
     TEST_CASE("Transform; std::tuple keeps its container form") {
         using L = std::tuple<int, char>;
         CHECK((std::is_same_v<Transform<MapPointer, L>, std::tuple<int*, char*>>));
