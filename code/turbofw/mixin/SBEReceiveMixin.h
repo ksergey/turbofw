@@ -55,7 +55,12 @@ struct SBEReceiveMixin {
             }
             ++receivedCount;
 
-            if (buffer.size() >= Header::sbeEncodedLength()) [[likely]] {
+            [&] {
+                if (buffer.size() < Header::sbeEncodedLength()) [[likely]] {
+                    ++droppedCount;
+                    return;
+                }
+
                 auto const bufferMutable = std::span{const_cast<std::byte*>(buffer.data()), buffer.size()};
                 auto const header = Header{bufferMutable.data()};
 
@@ -66,9 +71,7 @@ struct SBEReceiveMixin {
                 });
 
                 handledCount += tryDecodeSBE<L, Fn>(buffer, header, std::forward<Fn>(fn)) ? 1u : 0u;
-            } else {
-                ++droppedCount;
-            }
+            }();
 
             self.consume();
         }
