@@ -5,7 +5,6 @@
 
 #include <cstddef>
 #include <functional>
-#include <tuple>
 
 #include <turboq/Concepts.h>
 
@@ -13,13 +12,21 @@
 
 namespace turbofw::mixin {
 
+/// Counters returned by a SBE-aware drain, named for readability: `{received, handled, dropped}` reads at
+/// the call site either as structured bindings or as named members.
+struct ReceiveCounters {
+    std::size_t received;
+    std::size_t handled;
+    std::size_t dropped;
+};
+
 /// Adds a SBE-aware `receive` operation to a consumer that provides `fetch()` and `consume()`.
 ///
 /// Drains the queue: repeatedly fetches the next buffer and dispatches it to the callback via
 /// `tryDecodeSBE<L>()` until the queue is empty. `L` is the list of expected message types; they must share one
 /// generated MessageHeader (as all types of one schema do, `SBEMessageHeader<L>` checks it).
 ///
-/// Returns `{received, handled, dropped}`:
+/// Returns a \ref ReceiveCounters:
 /// - `received` -- every fetched buffer;
 /// - `handled` -- buffers decoded into a message of `L` and passed to the callback;
 /// - `dropped` -- buffers too short to carry even the MessageHeader (`tryDecodeSBE` cannot look at them, and a
@@ -41,23 +48,22 @@ namespace turbofw::mixin {
 struct SBEReceiveMixin {
     template <typename L, typename Self, typename Fn>
         requires turboq::Consumer<std::remove_cvref_t<Self>>
-    auto receive(this Self&& self, Fn&& fn) -> std::tuple<std::size_t, std::size_t, std::size_t> {
+    auto receive(this Self&& self, Fn&& fn) -> ReceiveCounters {
         using Header = SBEMessageHeader<L>;
 
-        std::size_t receivedCount = 0;
-        std::size_t handledCount = 0;
-        std::size_t droppedCount = 0;
+        ReceiveCounters counters{};
 
         while (true) {
             auto buffer = self.fetch();
             if (buffer.empty()) {
                 break;
             }
-            ++receivedCount;
+            ++counters.received;
 
+            // early-return guard shape: the cold drop path stays at the top, the hot path un-nested
             [&] {
-                if (buffer.size() < Header::sbeEncodedLength()) [[likely]] {
-                    ++droppedCount;
+                if (buffer.size() < Header::sbeEncodedLength()) [[unlikely]] {
+                    ++counters.dropped;
                     return;
                 }
 
@@ -70,13 +76,13 @@ struct SBEReceiveMixin {
                     }
                 });
 
-                handledCount += tryDecodeSBE<L, Fn>(buffer, header, std::forward<Fn>(fn)) ? 1u : 0u;
+                counters.handled += tryDecodeSBE<L, Fn>(buffer, header, std::forward<Fn>(fn)) ? 1u : 0u;
             }();
 
             self.consume();
         }
 
-        return std::make_tuple(receivedCount, handledCount, droppedCount);
+        return counters;
     }
 };
 
