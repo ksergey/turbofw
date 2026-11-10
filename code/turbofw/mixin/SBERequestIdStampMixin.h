@@ -12,29 +12,14 @@
 
 namespace turbofw::mixin {
 
-/// Stamps a fresh random \ref RequestId into every outgoing request message: each message sent through the producer
-/// that carries a `requestId` field gets its own id, so responses can be matched back per request. Composes with
-/// \ref SBESendMixin on a producer:
+/// Stamps a fresh random `requestId` into every outgoing message carrying the field (compile-time detection), so
+/// responses can be matched back per request. Composes with \ref SBESendMixin on a producer.
 ///
-/// \code{.cpp}
-/// struct RequestProducer : public turboq::MPSCMessageQueue::Producer, public turbofw::mixin::SBESendMixin,
-///                          public turbofw::mixin::SBERequestIdStampMixin {
-///     using Mixins = turbofw::mp::List<turbofw::mixin::SBERequestIdStampMixin>;
-/// };
-/// \endcode
-///
-/// **Generation** is a splitmix64 PRNG seeded at construction from `std::random_device` and the monotonic clock:
-/// ids differ across processes and restarts, and every draw differs from the previous one. The id sequence never
-/// produces the null sentinel (`0xFFFF...FF`) -- per the conventions it marks unsolicited/spontaneous messages;
-/// `0` is a valid request id. The PRNG is pure arithmetic: no syscalls, no allocations on the send path.
-///
-/// **Field detection** is compile-time: a message without a `requestId` field (an `svc::Heartbeat`, for example)
-/// is not touched.
-///
-/// **Request senders only**: a response echoes the `(appId, requestId)` of its request -- a service must not
-/// compose this mixin, or the echoed ids would be clobbered.
-///
-/// **Single-threaded**: like any turboq producer, a composed producer is used from one thread at a time.
+/// The ids come from a splitmix64 PRNG seeded at construction from `std::random_device` and the monotonic clock:
+/// they differ across processes and restarts, and the sequence never produces the null sentinel (`0xFFFF...FF`,
+/// the unsolicited/spontaneous marker; `0` is a valid id). Pure arithmetic on the send path -- no syscalls, no
+/// allocations. For request senders only: a response echoes the ids of its request, so a service must not compose
+/// this mixin. Single-threaded, like any turboq producer.
 class SBERequestIdStampMixin {
 public:
     SBERequestIdStampMixin() noexcept : rng_{detail::randomSeed()} {}

@@ -25,49 +25,20 @@ concept HeartbeatSender = turboq::Producer<Self> && requires(Self self) {
     });
 };
 
-/// Publishes `svc::Heartbeat` on a service producer, so a consumer never sees the service go silent on the wire.
+/// Publishes `svc::Heartbeat` on a producer so a consumer never sees the service go silent on the wire. Composes
+/// with \ref SBESendMixin; a producer without it fails to compile in the \ref HeartbeatSender concept.
 ///
-/// The mixin composes with \ref SBESendMixin on a producer:
+/// `startHeartbeating` publishes a Start heartbeat and enables periodic publication; `stopHeartbeating` publishes
+/// a Stop heartbeat and disables it; `keepAlive` publishes a heartbeat once the silence interval has elapsed. Every
+/// successful send of any message through the same producer (the \ref SBESendMixin `updateBody` hook, the mixin's
+/// own heartbeats included) arms a deadline as "publication moment + interval" (`turbofw::realtimeNanos()`).
 ///
-/// \code{.cpp}
-/// struct Producer : public turboq::MulticastMessageQueue::Producer, public turbofw::mixin::SBESendMixin,
-///                   public turbofw::mixin::SBEKeepAliveMixin {
-///     using Mixins = turbofw::mp::List<turbofw::mixin::SBEKeepAliveMixin>;
-/// };
-///
-/// producer.startHeartbeating(std::chrono::seconds{1});  // Start heartbeat, then one heartbeat per interval of silence
-/// ...                                                   // other service publications during the loop
-/// while (running) {
-///     // ... service work ...
-///     producer.keepAlive();  // publishes a heartbeat once the interval has elapsed
-/// }
-/// producer.stopHeartbeating();  // Stop heartbeat and stops periodic publication
-/// \endcode
-///
-/// **Publication detection** is through the \ref SBESendMixin `updateBody` hook: every successful send of any message
-/// through the same producer stamps the silence timer. The heartbeats the mixin itself publishes pass through the same
-/// `send<>()`, so its own `updateBody` invocation resets the silence timer too; no special treatment.
-///
-/// **Interval**: 1 second by default; set at 'startHeartbeating' or with 'setHeartbeatInterval' at any time. Every
-/// successful publication arms a deadline as "publication moment + interval" (`turbofw::realtimeNanos()`); the next
-/// silence beat goes out once the deadline passes. A changed interval applies to the deadlines armed after it: the
-/// setter alone does not re-arm the current one.
-///
-/// **Field stamping**: the mixin writes `ts` (wall-clock at publication) and owns `flags`: every heartbeat it
-/// publishes carries exactly the flags it was asked for -- empty for periodic (keepAlive) ones, the `Start`/`Stop`
-/// bit for event ones. `flags` is overwritten wholesale, not read-modify-write: queue slots are reused without
-/// zeroing, so an OR would pick up stale bits of a previous message. As a consequence, state flags (NotConnected,
-/// Recovering) cannot be stamped onto the mixin's heartbeats through an updateBody hook -- the mixin's callback runs
-/// after all hooks. A service that repeats its state flags publishes those heartbeats itself, through
-/// `send<svc::Heartbeat>`. `serviceId` is not written either: it stays whatever the reused slot holds (null on a
-/// fresh region) until a dedicated stamping mixin (not yet written) fills it.
-///
-/// **Single-threaded**: the silence state is plain data; like any turboq producer, a composed producer is used from
-/// one thread at a time. The clock is read only while heartbeating is enabled: updateBody parks itself and keepAlive
-/// returns immediately when stopped, so a stopped service does not pay for this mixin at all.
-///
-/// **Availability**: a failed send is swallowed (an mpsc queue returns ENOBUFS when full; a multicast queue never
-/// fails): the failed publication does not re-arm the deadline, so the next \ref keepAlive call retries.
+/// The interval is 1 second by default, settable at `startHeartbeating` or with `setHeartbeatInterval`; a changed
+/// interval applies to the deadlines armed after it, the setter alone does not re-arm the current one. A failed
+/// send (an mpsc queue returns ENOBUFS when full; a multicast queue never fails) is swallowed and does not re-arm
+/// the deadline, so the next `keepAlive` retries. The mixin writes `ts` and owns `flags` wholesale: empty for
+/// periodic heartbeats, the `Start`/`Stop` bit for event ones (no read-modify-write -- queue slots are reused
+/// without zeroing). `serviceId` is not written. Single-threaded; no clock reads while heartbeating is disabled.
 class SBEKeepAliveMixin {
 private:
     using ServiceFlags = svc::ServiceFlags;

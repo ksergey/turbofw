@@ -12,27 +12,13 @@
 
 namespace turbofw::mixin {
 
-/// Stamps \ref AppId into outgoing request messages: every message sent through the producer that carries an `appId`
-/// field gets the mixin's value. Composes with \ref SBESendMixin on a producer:
+/// Stamps the mixin's `appId` into every outgoing message carrying the field (compile-time detection; optional
+/// `AppIdNULL` fields included). Composes with \ref SBESendMixin on a producer.
 ///
-/// \code{.cpp}
-/// struct RequestProducer : public turboq::MPSCMessageQueue::Producer, public turbofw::mixin::SBESendMixin,
-///                          public turbofw::mixin::SBEAppIdStampMixin {
-///     using Mixins = turbofw::mp::List<turbofw::mixin::SBEAppIdStampMixin>;
-/// };
-/// \endcode
-///
-/// **Value**: generated randomly at construction (`0xFFFFFFFF` -- the null sentinel -- is excluded); `setAppId`
-/// pins a fixed one. Per the conventions, an appId is a random 32-bit id chosen by the client and is reused for
-/// every request it sends; `appId()` reports the value in effect.
-///
-/// **Field detection** is compile-time: a message without an `appId` field (an `svc::Heartbeat`, for example) is
-/// not touched. Optional fields (`AppIdNULL`) are stamped like required ones.
-///
-/// **Request senders only**: a response echoes the `(appId, requestId)` of its request -- a service must not
-/// compose this mixin, or the echoed ids would be clobbered.
-///
-/// **Single-threaded**: like any turboq producer, a composed producer is used from one thread at a time.
+/// The value is generated randomly at construction (the `0xFFFFFFFF` null sentinel is excluded) and reused for
+/// every request; `setAppId` pins a fixed one, `appId()` reports the value in effect. For request senders only:
+/// a response echoes the ids of its request, so a service must not compose this mixin. Single-threaded, like any
+/// turboq producer.
 class SBEAppIdStampMixin {
 public:
     /// A fresh random appId
