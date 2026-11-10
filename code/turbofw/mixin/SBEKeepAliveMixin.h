@@ -25,7 +25,7 @@ concept HeartbeatSender = turboq::Producer<Self> && requires(Self self) {
     });
 };
 
-/// Publishes `svc::Heartbeat` on a service producer, so a consumer never sees the service go silent onto the wire.
+/// Publishes `svc::Heartbeat` on a service producer, so a consumer never sees the service go silent on the wire.
 ///
 /// The mixin composes with \ref SBESendMixin on a producer:
 ///
@@ -35,7 +35,7 @@ concept HeartbeatSender = turboq::Producer<Self> && requires(Self self) {
 ///     using Mixins = turbofw::mp::List<turbofw::mixin::SBEKeepAliveMixin>;
 /// };
 ///
-/// producer.startHeartbeating(std::chrono::seconds{1});  // Start heartbeat + after that once interval on the silence
+/// producer.startHeartbeating(std::chrono::seconds{1});  // Start heartbeat, then one heartbeat per interval of silence
 /// ...                                                   // other service publications during the loop
 /// while (running) {
 ///     // ... service work ...
@@ -48,25 +48,37 @@ concept HeartbeatSender = turboq::Producer<Self> && requires(Self self) {
 /// through the same producer stamps the silence timer. The heartbeats the mixin itself publishes pass through the same
 /// `send<>()`, so its own `updateBody` invocation resets the silence timer too; no special treatment.
 ///
-/// **Interval**: 1 second by default; set at 'startHeartbeating' or with 'setHeartbeatInterval' at any time. The
-/// silence timer uses `turbofw::monotonicNanos()`.
+/// **Interval**: 1 second by default; set at 'startHeartbeating' or with 'setHeartbeatInterval' at any time. Every
+/// successful publication arms a deadline as "publication moment + interval" (`turbofw::realtimeNanos()`); the next
+/// silence beat goes out once the deadline passes. A changed interval applies to the deadlines armed after it: the
+/// setter alone does not re-arm the current one.
 ///
-/// **Field stamping**: the mixin sets only `timestamp` (wall-clock at publication). It leaves `flags` alone for
-/// periodic (keepAlive) heartbeats -- state flags (NotConnected, Recovering) are repeated by the service, typically
-/// through a stamping hook earlier in the `Mixins` list, and this mixin reads and rewrites `flags` only to add the
-/// `Start`/`Stop` bit of its own event heartbeats. `serviceId` stays null until a dedicated stamping mixin (not yet
-/// written) fills it.
+/// **Field stamping**: the mixin writes `timestamp` (wall-clock at publication) and owns `flags`: every heartbeat it
+/// publishes carries exactly the flags it was asked for -- empty for periodic (keepAlive) ones, the `Start`/`Stop`
+/// bit for event ones. `flags` is overwritten wholesale, not read-modify-write: queue slots are reused without
+/// zeroing, so an OR would pick up stale bits of a previous message. As a consequence, state flags (NotConnected,
+/// Recovering) cannot be stamped onto the mixin's heartbeats through an updateBody hook -- the mixin's callback runs
+/// after all hooks. A service that repeats its state flags publishes those heartbeats itself, through
+/// `send<svc::Heartbeat>`. `serviceId` is not written either: it stays whatever the reused slot holds (null on a
+/// fresh region) until a dedicated stamping mixin (not yet written) fills it.
 ///
 /// **Single-threaded**: the silence state is plain data; like any turboq producer, a composed producer is used from
 /// one thread at a time. The clock is read only while heartbeating is enabled: updateBody parks itself and keepAlive
 /// returns immediately when stopped, so a stopped service does not pay for this mixin at all.
 ///
-/// **Availability**: the interval under 'stopHeartbeating' at send (maxSize of multicast never fails; only mpsc
-/// scenario ENOBUFS) is swallowed: keepAlive keeps lastPublished unchanged, so the next call retries.
-struct SBEKeepAliveMixin {
+/// **Availability**: a failed send is swallowed (an mpsc queue returns ENOBUFS when full; a multicast queue never
+/// fails): the failed publication does not re-arm the deadline, so the next \ref keepAlive call retries.
+class SBEKeepAliveMixin {
+private:
+    using ServiceFlags = svc::ServiceFlags;
+
+    std::chrono::nanoseconds interval_{std::chrono::seconds{1}};
+    std::uint64_t nextHearbeatSendTime_{0};
+    bool enabled_{false};
+
 public:
-    auto setHeartbeatInterval(std::chrono::nanoseconds interval) noexcept -> void {
-        intervalNs_ = interval.count();
+    auto setHeartbeatInterval(std::chrono::nanoseconds value) noexcept -> void {
+        interval_ = value;
     }
 
     /// Publishes a Heartbeat with the `Start` flag and enables periodic publication: subsequent calls of \ref keepAlive
@@ -83,8 +95,7 @@ public:
             self.setHeartbeatInterval(*interval);
         }
         self.enabled_ = true;
-        self.lastPublishedNs_ = monotonicNanos();
-        self.publishEventHeartbeat(true);
+        self.sendHeartbeat(ServiceFlags{}.start(true));
     }
 
     /// Publishes a Heartbeat with the `Stop` flag and disables periodic publication: \ref keepAlive does nothing until
@@ -95,8 +106,8 @@ public:
         if (!self.enabled_) {
             return;
         }
-        self.lastPublishedNs_ = monotonicNanos();
-        self.publishEventHeartbeat(false);
+        self.sendHeartbeat(ServiceFlags{}.stop(true));
+        self.nextHearbeatSendTime_ = 0;
         self.enabled_ = false;
     }
 
@@ -108,45 +119,32 @@ public:
         if (!self.enabled_) {
             return;
         }
-        auto const now = monotonicNanos();
-        if (now - self.lastPublishedNs_ < static_cast<std::uint64_t>(self.intervalNs_)) {
+        auto const now = realtimeNanos();
+        if (self.nextHearbeatSendTime_ > now) {
             return;
         }
-        (void)self.template send<svc::Heartbeat>([](svc::Heartbeat msg) {
-            msg.get<"timestamp">().value(realtimeNanos());
-        });
+        self.sendHeartbeat(ServiceFlags{}, now);
     }
 
     /// \ref SBESendMixin hook: sends of any message count as activity and restart the silence timer. No clock reads at
     /// all while heartbeating is disabled.
     template <typename M>
     auto updateBody([[maybe_unused]] M msg) noexcept -> void {
-        if (!enabled_) {
+        if (!enabled_) [[unlikely]] {
             return;
         }
-        lastPublishedNs_ = monotonicNanos();
+        nextHearbeatSendTime_ = realtimeNanos() + interval_.count();
     }
 
 private:
     template <typename Self>
         requires HeartbeatSender<std::remove_cvref_t<Self>>
-    auto publishEventHeartbeat(this Self&& self, bool start) -> void {
-        (void)self.template send<svc::Heartbeat>([start](svc::Heartbeat msg) {
-            // read-modify-write: preserve the state flags stamped by earlier hooks in the `Mixins` list
-            auto flags = msg.get<"flags">().value();
-            if (start) {
-                flags.start(true);
-            } else {
-                flags.stop(true);
-            }
+    auto sendHeartbeat(this Self&& self, ServiceFlags flags, std::uint64_t timestamp = realtimeNanos()) -> void {
+        (void)self.template send<svc::Heartbeat>([&](svc::Heartbeat msg) {
             msg.get<"flags">().value(flags);
-            msg.get<"timestamp">().value(realtimeNanos());
+            msg.get<"timestamp">().value(timestamp);
         });
     }
-
-    std::int64_t intervalNs_{std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::seconds{1}).count()};
-    std::uint64_t lastPublishedNs_{0};
-    bool enabled_{false};
 };
 
 } // namespace turbofw::mixin

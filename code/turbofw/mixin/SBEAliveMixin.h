@@ -41,23 +41,21 @@ namespace turbofw::mixin {
 /// **Hot-path note**: the hook reads `turbofw::monotonicNanos()` (vDSO) once per received message to stamp the
 /// silence timer, and decodes a Heartbeat body only when the header matches -- otherwise it is a single
 /// (schemaId, templateId) compare.
-struct SBEAliveMixin {
+class SBEAliveMixin {
+private:
+    std::chrono::nanoseconds interval_{std::chrono::seconds{1}};
+    std::uint64_t nextMessageDeadline_{0};
+
 public:
     /// Changes the silence interval: a service is alive while its last message is younger than this
-    auto setAliveInterval(std::chrono::nanoseconds interval) noexcept -> void {
-        intervalNs_ = interval.count();
+    auto setAliveInterval(std::chrono::nanoseconds value) noexcept -> void {
+        interval_ = value;
     }
 
     /// `true` if the service is alive: some message arrived within the configured interval, and no Stop heartbeat
     /// latched the mixin into the stopped state. `false` before the first received message
     [[nodiscard]] auto isAlive() const noexcept -> bool {
-        if (stopped_) {
-            return false;
-        }
-        if (lastMessageNs_ == 0) {
-            return false; // nothing received yet
-        }
-        return monotonicNanos() - lastMessageNs_ < static_cast<std::uint64_t>(intervalNs_);
+        return monotonicNanos() < nextMessageDeadline_;
     }
 
     /// \ref SBEReceiveMixin hook: runs for every buffer with a readable MessageHeader, before the decode list gets
@@ -65,8 +63,7 @@ public:
     /// (decoded here from the buffer, guarded against a truncated body)
     template <typename Header>
     auto processMessage(Header header, std::span<std::byte const> buffer) noexcept -> void {
-        lastMessageNs_ = monotonicNanos();
-        stopped_ = false;
+        nextMessageDeadline_ = monotonicNanos() + interval_.count();
 
         if (header.template get<"schemaId">().value() != svc::Heartbeat::sbeSchemaId() ||
             header.template get<"templateId">().value() != svc::Heartbeat::sbeTemplateId()) {
@@ -76,17 +73,13 @@ public:
         if (buffer.size() < Header::sbeEncodedLength() + blockLength) [[unlikely]] {
             return; // a truncated body: leave the latch cleared, the decode step reports it (fatally) instead
         }
-        auto msg = svc::Heartbeat{std::span<std::byte>{const_cast<std::byte*>(buffer.data()), buffer.size()},
-            Header::sbeEncodedLength(), blockLength, header.template get<"version">().value()};
-        if (msg.get<"flags">().value().stop()) {
-            stopped_ = true;
+        auto const mutableBuffer = std::span<std::byte>{const_cast<std::byte*>(buffer.data()), buffer.size()};
+        auto msg = svc::Heartbeat{
+            mutableBuffer, Header::sbeEncodedLength(), blockLength, header.template get<"version">().value()};
+        if (msg.get<"flags">().value().stop()) [[unlikely]] {
+            nextMessageDeadline_ = 0;
         }
     }
-
-private:
-    std::int64_t intervalNs_{std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::seconds{1}).count()};
-    std::uint64_t lastMessageNs_{0};
-    bool stopped_{false};
 };
 
 } // namespace turbofw::mixin

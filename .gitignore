@@ -34,3 +34,6 @@
 /build*/
 /release*/
 /debug*/
+
+# ctest logs run from the repository root
+Testing/

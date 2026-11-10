@@ -71,7 +71,13 @@ TEST_SUITE("SBEAliveMixin") {
         drain(consumer);
         CHECK(consumer.isAlive()); // the default interval is 1s, the beat is fresh
 
+        // the deadline was armed as "beat moment + default interval"; narrowing the interval does not shorten it
         consumer.setAliveInterval(std::chrono::milliseconds{1});
+        CHECK(consumer.isAlive());
+
+        // the next activity re-arms the deadline with the current interval
+        publishStartBeat(producer);
+        drain(consumer);
         std::this_thread::sleep_for(std::chrono::milliseconds{3});
         CHECK_FALSE(consumer.isAlive());
     }
@@ -138,19 +144,26 @@ TEST_SUITE("SBEAliveMixin") {
         CHECK(consumer.isAlive());
     }
 
-    TEST_CASE("setAliveInterval widens and narrows the window at any time") {
+    TEST_CASE("setAliveInterval applies to the deadlines armed after it") {
         auto queue = testing::Queue{};
         auto producer = TestProducer{&queue};
         auto consumer = TestConsumer{&queue};
 
         publishStartBeat(producer);
         drain(consumer);
+        CHECK(consumer.isAlive()); // armed with the default 1s interval
 
+        // widening: the next beat re-arms the deadline as "now + 10s", so the silence does not end it
         consumer.setAliveInterval(std::chrono::seconds{10});
-        std::this_thread::sleep_for(std::chrono::milliseconds{2});
+        publishStartBeat(producer);
+        drain(consumer);
+        std::this_thread::sleep_for(std::chrono::milliseconds{5});
         CHECK(consumer.isAlive());
 
+        // narrowing: one more beat re-arms the deadline as "now + 1ms"
         consumer.setAliveInterval(std::chrono::milliseconds{1});
+        publishStartBeat(producer);
+        drain(consumer);
         std::this_thread::sleep_for(std::chrono::milliseconds{3});
         CHECK_FALSE(consumer.isAlive());
     }

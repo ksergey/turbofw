@@ -153,7 +153,7 @@ TEST_SUITE("SBEKeepAliveMixin") {
         CHECK_EQ(drainedHeartbeatFlags(consumer).size(), 1);
     }
 
-    TEST_CASE("setHeartbeatInterval changes the interval on the fly") {
+    TEST_CASE("setHeartbeatInterval applies to the deadlines armed after it") {
         auto queue = testing::Queue{};
         auto producer = TestProducer{&queue};
         auto consumer = TestConsumer{&queue};
@@ -163,16 +163,30 @@ TEST_SUITE("SBEKeepAliveMixin") {
         producer.startHeartbeating();
         std::this_thread::sleep_for(std::chrono::milliseconds{2});
         producer.keepAlive();
-        CHECK_EQ(drainedHeartbeatFlags(consumer).size(), 2);
+        CHECK_EQ(drainedHeartbeatFlags(consumer).size(), 2); // the Start beat + a silence beat
 
-        // a long interval swallows the elapsed time: without 2ms does not silence publication
+        // the silence beat armed the deadline as "its moment + 1ms"; widening does not disarm a stale deadline
         producer.setHeartbeatInterval(std::chrono::seconds{10});
+        std::this_thread::sleep_for(std::chrono::milliseconds{2}); // the deadline goes stale, still on the old interval
+        producer.keepAlive();
+        CHECK_EQ(drainedHeartbeatFlags(consumer).size(), 1);
+
+        // that publication re-armed the deadline as "now + 10s": silence holds
         std::this_thread::sleep_for(std::chrono::milliseconds{2});
         producer.keepAlive();
         CHECK_EQ(drainedHeartbeatFlags(consumer).size(), 0);
 
-        // a short interval publishes immediately once the previous beats are older than the interval
+        // the setter alone does not re-arm the deadline
         producer.setHeartbeatInterval(std::chrono::milliseconds{1});
+        std::this_thread::sleep_for(std::chrono::milliseconds{2});
+        producer.keepAlive();
+        CHECK_EQ(drainedHeartbeatFlags(consumer).size(), 0);
+
+        // any publication re-arms with the current interval: the next silence beat comes 1ms later
+        auto const sent = producer.send<svc::SetLogLevel>([](svc::SetLogLevel msg) {
+            msg.get<"level">().value(svc::LogLevel::Info);
+        });
+        REQUIRE(sent);
         std::this_thread::sleep_for(std::chrono::milliseconds{2});
         producer.keepAlive();
         CHECK_EQ(drainedHeartbeatFlags(consumer).size(), 1);
