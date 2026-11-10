@@ -4,6 +4,7 @@
 #pragma once
 
 #include <cstdint>
+#include <limits>
 
 #include "detail/Random.h"
 #include <turbofw/SBE.h>
@@ -24,8 +25,8 @@ namespace turbofw::mixin {
 ///
 /// **Generation** is a splitmix64 PRNG seeded at construction from `std::random_device` and the monotonic clock:
 /// ids differ across processes and restarts, and every draw differs from the previous one. The id sequence never
-/// produces `0` -- per the conventions it marks unsolicited/spontaneous messages. The PRNG is pure arithmetic: no
-/// syscalls, no allocations on the send path.
+/// produces the null sentinel (`0xFFFF...FF`) -- per the conventions it marks unsolicited/spontaneous messages;
+/// `0` is a valid request id. The PRNG is pure arithmetic: no syscalls, no allocations on the send path.
 ///
 /// **Field detection** is compile-time: a message without a `requestId` field (an `svc::Heartbeat`, for example)
 /// is not touched.
@@ -49,7 +50,7 @@ public:
 private:
     [[nodiscard]] auto nextRequestId() noexcept -> std::uint64_t {
         auto id = rng_.next();
-        while (id == 0) { // 0 means unsolicited/spontaneous
+        while (id == std::numeric_limits<std::uint64_t>::max()) { // the null sentinel: unsolicited/spontaneous
             id = rng_.next();
         }
         return id;

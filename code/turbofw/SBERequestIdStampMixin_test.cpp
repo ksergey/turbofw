@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include <cstdint>
+#include <limits>
 #include <span>
 #include <unordered_set>
 #include <vector>
@@ -55,7 +56,7 @@ auto drainedRequestIds(TestConsumer& consumer) -> std::vector<std::uint64_t> {
 } // namespace
 
 TEST_SUITE("SBERequestIdStampMixin") {
-    TEST_CASE("a fresh random requestId on every message, never zero") {
+    TEST_CASE("a fresh random requestId on every message, never the null sentinel") {
         auto queue = testing::Queue{};
         auto producer = TestProducer{&queue};
         auto consumer = TestConsumer{&queue};
@@ -69,8 +70,9 @@ TEST_SUITE("SBERequestIdStampMixin") {
 
         auto const ids = drainedRequestIds(consumer);
         REQUIRE_EQ(ids.size(), 2);
-        CHECK_NE(ids[0], std::uint64_t{0});
-        CHECK_NE(ids[1], std::uint64_t{0});
+        auto constexpr nullId = std::numeric_limits<std::uint64_t>::max();
+        CHECK_NE(ids[0], nullId);
+        CHECK_NE(ids[1], nullId);
         CHECK_NE(ids[0], ids[1]); // every message gets its own id
     }
 
@@ -93,7 +95,7 @@ TEST_SUITE("SBERequestIdStampMixin") {
 
         auto const unique = std::unordered_set<std::uint64_t>{ids.cbegin(), ids.cend()};
         CHECK_EQ(unique.size(), ids.size());
-        CHECK_EQ(unique.count(0), 0);
+        CHECK_EQ(unique.count(std::numeric_limits<std::uint64_t>::max()), 0); // never the null sentinel
     }
 
     TEST_CASE("a message without the requestId field is not touched") {

@@ -304,9 +304,10 @@ TEST_SUITE("SBE field type") {
         static_assert(turbofw::SBEHasFieldNull<md::MbpUpdate, "price">);
         static_assert(turbofw::SBEHasFieldNull<md::Trade, "aggressor">);
         static_assert(turbofw::SBEHasFieldNull<svc::Heartbeat, "serviceId">);
+        static_assert(turbofw::SBEHasFieldNull<trd::NewOrder, "requestId">); // optional since the requestId rework
         // required fields and repeating groups carry no NullValue
         static_assert(!turbofw::SBEHasFieldNull<md::Trade, "price">);
-        static_assert(!turbofw::SBEHasFieldNull<trd::NewOrder, "requestId">);
+        static_assert(!turbofw::SBEHasFieldNull<trd::NewOrder, "quantity">);
         static_assert(!turbofw::SBEHasFieldNull<md::MbpUpdate, "bids">);
         static_assert(!turbofw::SBEHasFieldNull<int, "anything">);
 

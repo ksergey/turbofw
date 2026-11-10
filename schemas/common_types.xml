@@ -23,9 +23,8 @@
 
   <!-- ===== Mandatory (non-nullable) types ===== -->
   <type name="InstrumentId" primitiveType="uint32"/> <!-- 0xFFFFFFFF is reserved for null -->
-  <type name="AppId"        primitiveType="uint32"/> <!-- chosen randomly by the client; 0xFFFFFFFF is reserved for null -->
+  <type name="AppId" primitiveType="uint32"/> <!-- random by the client; 0xFFFFFFFF reserved for null -->
   <type name="ServiceId"    primitiveType="uint16"/> <!-- 0xFFFF is reserved for null -->
-  <type name="RequestId"    primitiveType="uint64"/> <!-- chosen by the client; 0 means unsolicited/spontaneous -->
   <type name="Timestamp"    primitiveType="int64"/>  <!-- ns since epoch, UTC -->
   <type name="Qty"          primitiveType="int64"/>
 
@@ -39,6 +38,7 @@
   <type name="InstrumentIdNULL" primitiveType="uint32" presence="optional"/>
   <type name="AppIdNULL"        primitiveType="uint32" presence="optional"/> <!-- null = no addressee (broadcast) -->
   <type name="ServiceIdNULL"    primitiveType="uint16" presence="optional"/>
+  <type name="RequestIdNULL"    primitiveType="uint64" presence="optional"/> <!-- null = unsolicited/spontaneous -->
   <type name="TimestampNULL"    primitiveType="int64"  presence="optional"/>
   <type name="QtyNULL"          primitiveType="int64"  presence="optional"/>
   <type name="UInt16NULL"       primitiveType="uint16" presence="optional"/>

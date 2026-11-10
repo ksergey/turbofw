@@ -55,7 +55,7 @@
        queue. Response: SetLogLevelResult on the multicast queue. -->
   <sbe:message name="SetLogLevel" id="102">
     <field name="appId"  id="1" type="AppId"/>
-    <field name="requestId" id="2" type="RequestId"/>
+    <field name="requestId" id="2" type="RequestIdNULL" presence="optional"/>
     <field name="level"     id="3" type="LogLevel"/>
   </sbe:message>
 
@@ -63,7 +63,7 @@
        was not Ok). status: Ok, or InvalidRequest for an unknown level. -->
   <sbe:message name="SetLogLevelResult" id="103">
     <field name="appId"  id="1" type="AppId"/>
-    <field name="requestId" id="2" type="RequestId"/>
+    <field name="requestId" id="2" type="RequestIdNULL" presence="optional"/>
     <field name="status"    id="3" type="RequestStatus"/>
     <field name="level"     id="4" type="LogLevel"/>
   </sbe:message>

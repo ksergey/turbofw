@@ -3,7 +3,7 @@
 
      Like every service in the system, Metadata has two queues:
        - multicast queue: publishes spontaneous updates (appId = null,
-         requestId = 0) and responses to requests;
+         requestId = null) and responses to requests;
        - MPSC queue: receives requests.
      Clients match responses by (appId, requestId) and updates by content. -->
 <sbe:messageSchema xmlns:sbe="http://fixprotocol.io/2016/sbe"
@@ -82,7 +82,7 @@
        reportedTs: time when the service reported itself; it does not affect version. -->
   <sbe:message name="RegisterService" id="10">
     <field name="appId"   id="1" type="AppId"/>
-    <field name="requestId"  id="2" type="RequestId"/>
+    <field name="requestId"  id="2" type="RequestIdNULL" presence="optional"/>
     <field name="reportedTs" id="3" type="Timestamp"/>
     <field name="state"      id="4" type="ServiceState"/>
     <data  name="name"         id="5" type="varStringEncoding"/> <!-- unique service name -->
@@ -92,7 +92,7 @@
 
   <sbe:message name="RegisterServiceResult" id="11">
     <field name="appId"  id="1" type="AppId"/>
-    <field name="requestId" id="2" type="RequestId"/>
+    <field name="requestId" id="2" type="RequestIdNULL" presence="optional"/>
     <field name="status"    id="3" type="RegisterStatus"/>
     <field name="serviceId" id="4" type="ServiceIdNULL" presence="optional"/> <!-- null if Rejected -->
     <field name="version"   id="5" type="uint32"/>
@@ -107,7 +107,7 @@
        only refreshes the stored reportedTs. -->
   <sbe:message name="RegisterInstrument" id="12">
     <field name="appId"   id="1" type="AppId"/>
-    <field name="requestId"  id="2" type="RequestId"/>
+    <field name="requestId"  id="2" type="RequestIdNULL" presence="optional"/>
     <field name="reportedTs" id="3" type="Timestamp"/>
     <field name="attrs"      id="4" type="InstrumentAttributes"/>
     <data  name="exchangeSymbol" id="5" type="varStringEncoding"/> <!-- natural key together with serviceId and venueId -->
@@ -116,7 +116,7 @@
 
   <sbe:message name="RegisterInstrumentResult" id="13">
     <field name="appId"     id="1" type="AppId"/>
-    <field name="requestId"    id="2" type="RequestId"/>
+    <field name="requestId"    id="2" type="RequestIdNULL" presence="optional"/>
     <field name="status"       id="3" type="RegisterStatus"/>
     <field name="instrumentId" id="4" type="InstrumentIdNULL" presence="optional"/> <!-- null if Rejected/UnknownService -->
     <field name="version"      id="5" type="uint32"/>
@@ -128,7 +128,7 @@
        Response: ServiceDefinition message(s) followed by RequestComplete. -->
   <sbe:message name="ServiceRequest" id="20">
     <field name="appId"  id="1" type="AppId"/>
-    <field name="requestId" id="2" type="RequestId"/>
+    <field name="requestId" id="2" type="RequestIdNULL" presence="optional"/>
     <field name="serviceId" id="3" type="ServiceIdNULL" presence="optional"/>
     <field name="state"     id="4" type="ServiceState"  presence="optional"/>
     <data  name="name"      id="5" type="varStringEncoding"/> <!-- empty = any -->
@@ -139,7 +139,7 @@
        Response: InstrumentDefinition message(s) followed by RequestComplete. -->
   <sbe:message name="InstrumentRequest" id="21">
     <field name="appId"       id="1" type="AppId"/>
-    <field name="requestId"      id="2" type="RequestId"/>
+    <field name="requestId"      id="2" type="RequestIdNULL" presence="optional"/>
     <field name="instrumentId"   id="3" type="InstrumentIdNULL" presence="optional"/>
     <field name="venueId"        id="4" type="UInt16NULL"       presence="optional"/>
     <field name="serviceId"      id="5" type="ServiceIdNULL"    presence="optional"/>
@@ -151,12 +151,12 @@
   <!-- ================= Metadata -> clients ================= -->
 
   <!-- Response to ServiceRequest, or a spontaneous update on the multicast
-       queue (appId = null, requestId = 0).
+       queue (appId = null, requestId = null).
        A client applies the definition only if version is greater than the
        locally known version of this service. -->
   <sbe:message name="ServiceDefinition" id="30">
     <field name="appId"   id="1" type="AppIdNULL" presence="optional"/>
-    <field name="requestId"  id="2" type="RequestId"/>
+    <field name="requestId"  id="2" type="RequestIdNULL" presence="optional"/>
     <field name="serviceId"  id="3" type="ServiceId"/>
     <field name="version"    id="4" type="uint32"/>
     <field name="reportedTs" id="5" type="Timestamp"/> <!-- last time the service reported itself -->
@@ -167,13 +167,13 @@
   </sbe:message>
 
   <!-- Response to InstrumentRequest, or a spontaneous update on the multicast
-       queue (appId = null, requestId = 0).
+       queue (appId = null, requestId = null).
        A client applies the definition only if version is greater than the
        locally known version of this instrument.
        reportedTs: the last time a service reported the instrument. -->
   <sbe:message name="InstrumentDefinition" id="31">
     <field name="appId"     id="1" type="AppIdNULL" presence="optional"/>
-    <field name="requestId"    id="2" type="RequestId"/>
+    <field name="requestId"    id="2" type="RequestIdNULL" presence="optional"/>
     <field name="instrumentId" id="3" type="InstrumentId"/>
     <field name="version"      id="4" type="uint32"/>
     <field name="reportedTs"   id="5" type="Timestamp"/>
@@ -186,7 +186,7 @@
        count = number of definitions sent. -->
   <sbe:message name="RequestComplete" id="32">
     <field name="appId"  id="1" type="AppId"/>
-    <field name="requestId" id="2" type="RequestId"/>
+    <field name="requestId" id="2" type="RequestIdNULL" presence="optional"/>
     <field name="status"    id="3" type="RequestStatus"/>
     <field name="count"     id="4" type="uint32"/>
   </sbe:message>

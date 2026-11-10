@@ -45,7 +45,7 @@ don't duplicate them here.
 ### Request / response conventions
 
 - `appId` is a random 32-bit id chosen by the client (`0xFFFFFFFF` is null). `requestId` is chosen by the client.
-  A response echoes both. Spontaneous messages have `appId = null` and `requestId = 0`.
+  A response echoes both. Spontaneous messages have `appId = null` and `requestId = null`.
 - Pattern: a request on `MPSC`, then zero or more responses on `Multicast`, then (for multi-message responses) a
   terminating `RequestComplete` carrying `count`.
 - There are no sequence numbers in the protocol. The design assumes the shared-memory queues do not lose messages;
@@ -75,7 +75,7 @@ don't duplicate them here.
   allocated and creation parameters stored is up to the connector. The client identifies its orders by its own
   `orderRef` (unique within a context). Generating `ClOrdID` is the connector's job (it may be venue-specific); the
   connector keeps the mapping, and `orderRef` stays stable across replaces. An `ExecutionReport` with
-  `requestId = 0` is unsolicited. Reports carry `instrumentId`, so third-party services can identify the instrument.
+  A null `requestId` is unsolicited. Reports carry `instrumentId`, so third-party services can identify the instrument.
 - **Metadata** is the source of truth for `instrumentId` and `serviceId` (assigned by Metadata, never reused). The
   natural key of an instrument is `(serviceId, venueId, exchangeSymbol)`: the same venue instrument received through
   two services is two instruments (grouping them is planned). Definitions are versioned; a client applies an update
