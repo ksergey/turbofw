@@ -16,7 +16,6 @@
 
 #include <chrono>
 #include <csignal>
-#include <cstdint>
 #include <span>
 #include <thread>
 #include <utility>
@@ -26,7 +25,9 @@
 #include <turbofw/Clock.h>
 #include <turbofw/Environment.h>
 #include <turbofw/mixin/ReceiveMixin.h>
+#include <turbofw/mixin/SBEKeepAliveMixin.h>
 #include <turbofw/mixin/SBESendMixin.h>
+#include <turbofw/mp/List.h>
 #include <turbofw/svc/schema.h>
 
 namespace {
@@ -37,12 +38,24 @@ extern "C" auto onStop(int) -> void {
     stopRequested = 1;
 }
 
-constexpr auto kIntervalMs = std::chrono::duration<std::uint32_t, std::milli>{500};
+constexpr auto kHeartbeatInterval = std::chrono::duration<std::uint32_t, std::milli>{500};
 
-/// Multicast producer composed with the SBE send mixin
-struct HeartbeatProducer : public turboq::MulticastMessageQueue::Producer, public turbofw::mixin::SBESendMixin {
+/// Multicast producer composed with the SBE send mixin and the keep-alive mixin
+struct HeartbeatProducer : public turboq::MulticastMessageQueue::Producer,
+                           public turbofw::mixin::SBESendMixin,
+                           public turbofw::mixin::SBEKeepAliveMixin {
     explicit HeartbeatProducer(turboq::MulticastMessageQueue::Producer producer) noexcept
         : turboq::MulticastMessageQueue::Producer{std::move(producer)} {}
+
+    using Mixins = turbofw::mp::List<turbofw::mixin::SBEKeepAliveMixin>;
+
+    /// Stamp serviceId into every published heartbeat; the keep-alive mixin handles Start/Stop and periodic ones
+    template <typename M>
+    auto updateBody(M msg) noexcept -> void {
+        if constexpr (requires { msg.template get<"serviceId">(); }) {
+            msg.template get<"serviceId">().reset(); // no id: the example is not registered in Metadata
+        }
+    }
 };
 
 /// mpsc consumer composed with the receive mixin
@@ -50,17 +63,6 @@ struct HeartbeatConsumer : public turboq::MPSCMessageQueue::Consumer, public tur
     explicit HeartbeatConsumer(turboq::MPSCMessageQueue::Consumer consumer) noexcept
         : turboq::MPSCMessageQueue::Consumer{std::move(consumer)} {}
 };
-
-/// Publish a heartbeat on the multicast queue.
-auto publishHeartbeat(HeartbeatProducer& producer, svc::ServiceFlags flags) -> bool {
-    return producer
-        .send<svc::Heartbeat>([&](svc::Heartbeat msg) {
-            msg.get<"timestamp">().value(turbofw::realtimeNanos());
-            msg.get<"serviceId">().reset(); // no id: the example is not registered in Metadata
-            msg.get<"flags">().value(flags);
-        })
-        .has_value();
-}
 
 } // namespace
 
@@ -97,26 +99,22 @@ auto main(int argc, char* argv[]) -> int {
         return 1;
     }
 
-    // Start event: consumers treat everything of the previous service instance as invalid
-    publishHeartbeat(*producer, svc::ServiceFlags{}.start(true));
+    // Start event: consumers treat everything of the previous service instance as invalid;
+    // afterwards the keep-alive mixin publishes one heartbeat per interval of wire silence
+    producer->startHeartbeating(std::chrono::duration_cast<std::chrono::nanoseconds>(kHeartbeatInterval));
 
-    auto nextHeartbeat = turbofw::monotonicNanos();
     while (!stopRequested) {
         // Drain the mpsc queue: this example serves no requests; messages are dispatched by
         // (schemaId, templateId), a real service would answer e.g. SetLogLevel here.
         consumer->receive([&](std::span<std::byte const>) {});
 
-        // Periodic heartbeat when nothing else has been published for a while
-        auto const now = turbofw::monotonicNanos();
-        if (now >= nextHeartbeat) {
-            nextHeartbeat = now + kIntervalMs.count() * 1'000'000ull;
-            publishHeartbeat(*producer, svc::ServiceFlags{});
-        }
+        // Periodic heartbeat when nothing else has been published for the configured interval
+        producer->keepAlive();
 
         std::this_thread::sleep_for(std::chrono::milliseconds{1});
     }
 
     // Stop event: the service stops publishing, consumers clean up their state for it
-    publishHeartbeat(*producer, svc::ServiceFlags{}.stop(true));
+    producer->stopHeartbeating();
     return 0;
 }
