@@ -104,7 +104,7 @@ TEST_SUITE("SBERequestIdStampMixin") {
         auto consumer = TestConsumer{&queue};
 
         producer.send<svc::Heartbeat>([](svc::Heartbeat msg) {
-            msg.get<"timestamp">().value(1);
+            msg.get<"ts">().value(1);
             msg.get<"flags">().value(svc::ServiceFlags{}.start(true));
         });
 

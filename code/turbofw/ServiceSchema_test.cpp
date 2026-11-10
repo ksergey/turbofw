@@ -15,7 +15,7 @@ TEST_SUITE("ServiceSchema") {
         std::array<std::byte, 128> buffer{};
 
         auto msg = svc::Heartbeat::wrapAndApplyHeader(buffer);
-        msg.get<"timestamp">().value(1'775'000'000'100);
+        msg.get<"ts">().value(1'775'000'000'100);
         msg.get<"serviceId">().value(3);
         msg.get<"flags">().value(svc::ServiceFlags{}.start(true).notConnected(true));
 
@@ -26,7 +26,7 @@ TEST_SUITE("ServiceSchema") {
             buffer, header.sbeEncodedLength(), header.get<"blockLength">().value(), header.get<"version">().value()};
         REQUIRE(decoded.get<"serviceId">().present());
         REQUIRE(decoded.get<"serviceId">().value() == 3);
-        REQUIRE_EQ(decoded.get<"timestamp">().value(), 1'775'000'000'100);
+        REQUIRE_EQ(decoded.get<"ts">().value(), 1'775'000'000'100);
         auto flags = decoded.get<"flags">().value();
         REQUIRE(flags.start());
         REQUIRE(flags.notConnected()); // state: kept on every heartbeat while the condition holds
@@ -38,7 +38,7 @@ TEST_SUITE("ServiceSchema") {
         std::array<std::byte, 128> buffer{};
 
         auto msg = svc::Heartbeat::wrapAndApplyHeader(buffer);
-        msg.get<"timestamp">().value(1'775'000'000'200);
+        msg.get<"ts">().value(1'775'000'000'200);
         msg.get<"serviceId">().reset(); // service without id
         msg.get<"flags">().value(svc::ServiceFlags{});
 
@@ -46,7 +46,7 @@ TEST_SUITE("ServiceSchema") {
         auto decoded = svc::Heartbeat{
             buffer, header.sbeEncodedLength(), header.get<"blockLength">().value(), header.get<"version">().value()};
         REQUIRE_FALSE(decoded.get<"serviceId">().present());
-        REQUIRE_EQ(decoded.get<"timestamp">().value(), 1'775'000'000'200);
+        REQUIRE_EQ(decoded.get<"ts">().value(), 1'775'000'000'200);
         auto flags = decoded.get<"flags">().value();
         REQUIRE_FALSE(flags.start());
         REQUIRE_FALSE(flags.stop());

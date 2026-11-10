@@ -91,7 +91,6 @@ TEST_SUITE("TradingSchema") {
         msg.get<"orderType">().value(trd::OrderType::Limit);
         msg.get<"timeInForce">().value(trd::TimeInForce::Gtd);
         msg.get<"price">().get<"mantissa">().value(10'050);
-        msg.get<"stopPrice">().get<"mantissa">().reset(); // stop price is not used by Limit
         msg.get<"qty">().value(5);
         msg.get<"displayQty">().value(1);
         msg.get<"expireTs">().value(1'775'000'000'000'000'000);
@@ -110,7 +109,6 @@ TEST_SUITE("TradingSchema") {
         REQUIRE(decoded.get<"timeInForce">().value() == trd::TimeInForce::Gtd);
         REQUIRE(decoded.get<"price">().present());
         REQUIRE_EQ(decoded.get<"price">().get<"mantissa">().value(), 10'050);
-        REQUIRE_FALSE(decoded.get<"stopPrice">().present());
         REQUIRE_EQ(decoded.get<"qty">().value(), 5);
         REQUIRE_EQ(decoded.get<"displayQty">().value(), 1);
         REQUIRE(decoded.get<"expireTs">().present());
@@ -130,7 +128,6 @@ TEST_SUITE("TradingSchema") {
         msg.get<"orderType">().value(trd::OrderType::Market);
         msg.get<"timeInForce">().value(trd::TimeInForce::Ioc);
         msg.get<"price">().get<"mantissa">().reset();
-        msg.get<"stopPrice">().get<"mantissa">().reset();
         msg.get<"qty">().value(1);
         msg.get<"displayQty">().reset();
         msg.get<"expireTs">().reset();
@@ -143,32 +140,6 @@ TEST_SUITE("TradingSchema") {
         REQUIRE(decoded.get<"orderType">().value() == trd::OrderType::Market);
     }
 
-    TEST_CASE("NewOrder stop order: stopPrice set, price null") {
-        std::array<std::byte, 128> buffer{};
-
-        auto msg = trd::NewOrder::wrapAndApplyHeader(buffer);
-        msg.get<"contextId">().value(7);
-        msg.get<"requestId">().value(0);
-        msg.get<"orderRef">().value(101u);
-        msg.get<"side">().value(trd::OrderSide::Sell);
-        msg.get<"orderType">().value(trd::OrderType::StopMarket);
-        msg.get<"timeInForce">().value(trd::TimeInForce::Day);
-        msg.get<"price">().get<"mantissa">().reset();
-        msg.get<"stopPrice">().get<"mantissa">().value(9'900);
-        msg.get<"qty">().value(2);
-        msg.get<"displayQty">().reset();
-        msg.get<"expireTs">().reset();
-        msg.get<"flags">().value(trd::OrderFlags{});
-
-        auto header = trd::MessageHeader{buffer.data()};
-        auto decoded = trd::NewOrder{
-            buffer, header.sbeEncodedLength(), header.get<"blockLength">().value(), header.get<"version">().value()};
-        REQUIRE_FALSE(decoded.get<"price">().present());
-        REQUIRE(decoded.get<"stopPrice">().present());
-        REQUIRE_EQ(decoded.get<"stopPrice">().get<"mantissa">().value(), 9'900);
-        REQUIRE(decoded.get<"orderType">().value() == trd::OrderType::StopMarket);
-    }
-
     TEST_CASE("ReplaceOrder: null fields keep the current values") {
         std::array<std::byte, 128> buffer{};
 
@@ -177,7 +148,6 @@ TEST_SUITE("TradingSchema") {
         msg.get<"requestId">().value(4);
         msg.get<"orderRef">().value(99u);
         msg.get<"price">().get<"mantissa">().value(10'060);
-        msg.get<"stopPrice">().get<"mantissa">().reset();
         msg.get<"qty">().reset();
 
         auto header = trd::MessageHeader{buffer.data()};
@@ -187,7 +157,6 @@ TEST_SUITE("TradingSchema") {
         REQUIRE_EQ(decoded.get<"orderRef">().value(), 99u);
         REQUIRE(decoded.get<"price">().present());
         REQUIRE_EQ(decoded.get<"price">().get<"mantissa">().value(), 10'060);
-        REQUIRE_FALSE(decoded.get<"stopPrice">().present());
         REQUIRE_FALSE(decoded.get<"qty">().present());
     }
 

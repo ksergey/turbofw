@@ -110,7 +110,7 @@ TEST_SUITE("SBEAppIdStampMixin") {
 
         producer.setAppId(AppId{42});
         producer.send<svc::Heartbeat>([](svc::Heartbeat msg) {
-            msg.get<"timestamp">().value(1);
+            msg.get<"ts">().value(1);
             msg.get<"flags">().value(svc::ServiceFlags{}.start(true));
         });
 

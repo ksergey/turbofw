@@ -33,7 +33,7 @@ struct TestConsumer : public testing::Consumer, public mixin::SBEReceiveMixin, p
 /// Publishes a Heartbeat carrying the given flag state
 auto publishBeat(TestProducer& producer, svc::ServiceFlags flags) -> void {
     producer.send<svc::Heartbeat>([flags](svc::Heartbeat msg) {
-        msg.get<"timestamp">().value(realtimeNanos());
+        msg.get<"ts">().value(realtimeNanos());
         msg.get<"flags">().value(flags);
     });
 }

@@ -34,7 +34,7 @@ Overloaded(Fns...) -> Overloaded<Fns...>;
 /// Encode a svc::Heartbeat with fixed fields into a buffer
 auto encodeHeartbeat(std::span<std::byte> buffer) -> void {
     auto msg = svc::Heartbeat::wrapAndApplyHeader(buffer);
-    msg.get<"timestamp">().value(222);
+    msg.get<"ts">().value(222);
     msg.get<"serviceId">().value(1);
     msg.get<"flags">().value(svc::ServiceFlags{}.start(true));
 }
@@ -110,7 +110,7 @@ TEST_SUITE("SBE") {
             [&](svc::Heartbeat msg) {
                 ++heartbeatCalls;
                 CHECK_EQ(msg.get<"serviceId">().value(), 1u);
-                CHECK_EQ(msg.get<"timestamp">().value(), 222);
+                CHECK_EQ(msg.get<"ts">().value(), 222);
             },
         };
         using Messages = mp::List<md::Snapshot, trd::CreateContext, svc::Heartbeat>;
@@ -211,7 +211,7 @@ TEST_SUITE("SBE") {
             },
             [&](svc::Heartbeat msg) {
                 ++heartbeatCalls;
-                CHECK_EQ(msg.get<"timestamp">().value(), 222);
+                CHECK_EQ(msg.get<"ts">().value(), 222);
             },
         };
 

@@ -21,7 +21,7 @@ namespace turbofw::mixin {
 template <typename Self>
 concept HeartbeatSender = turboq::Producer<Self> && requires(Self self) {
     self.template send<svc::Heartbeat>([](svc::Heartbeat msg) {
-        msg.get<"timestamp">().value(0);
+        msg.get<"ts">().value(0);
     });
 };
 
@@ -53,7 +53,7 @@ concept HeartbeatSender = turboq::Producer<Self> && requires(Self self) {
 /// silence beat goes out once the deadline passes. A changed interval applies to the deadlines armed after it: the
 /// setter alone does not re-arm the current one.
 ///
-/// **Field stamping**: the mixin writes `timestamp` (wall-clock at publication) and owns `flags`: every heartbeat it
+/// **Field stamping**: the mixin writes `ts` (wall-clock at publication) and owns `flags`: every heartbeat it
 /// publishes carries exactly the flags it was asked for -- empty for periodic (keepAlive) ones, the `Start`/`Stop`
 /// bit for event ones. `flags` is overwritten wholesale, not read-modify-write: queue slots are reused without
 /// zeroing, so an OR would pick up stale bits of a previous message. As a consequence, state flags (NotConnected,
@@ -142,7 +142,7 @@ private:
     auto sendHeartbeat(this Self&& self, ServiceFlags flags, std::uint64_t timestamp = realtimeNanos()) -> void {
         (void)self.template send<svc::Heartbeat>([&](svc::Heartbeat msg) {
             msg.get<"flags">().value(flags);
-            msg.get<"timestamp">().value(timestamp);
+            msg.get<"ts">().value(timestamp);
         });
     }
 };

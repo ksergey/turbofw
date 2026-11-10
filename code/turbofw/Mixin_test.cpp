@@ -136,7 +136,7 @@ TEST_SUITE("SBESendMixin") {
 
         auto constexpr kTimestamp = std::int64_t{222};
         auto const sent = producer.send<svc::Heartbeat>([&](svc::Heartbeat msg) {
-            msg.get<"timestamp">().value(kTimestamp);
+            msg.get<"ts">().value(kTimestamp);
             msg.get<"serviceId">().value(1);
             msg.get<"flags">().value(svc::ServiceFlags{}.start(true));
         });
@@ -149,7 +149,7 @@ TEST_SUITE("SBESendMixin") {
             auto msg = svc::Heartbeat{std::span<std::byte>{const_cast<std::byte*>(buffer.data()), buffer.size()},
                 header.sbeEncodedLength(), header.get<"blockLength">().value(), header.get<"version">().value()};
             REQUIRE_EQ(msg.get<"serviceId">().value(), 1u);
-            REQUIRE_EQ(msg.get<"timestamp">().value(), kTimestamp);
+            REQUIRE_EQ(msg.get<"ts">().value(), kTimestamp);
             auto flags = msg.get<"flags">().value();
             REQUIRE(flags.start());
         });
