@@ -235,7 +235,7 @@ TEST_SUITE("MdSchema") {
         header.get<"instrumentId">().value(42);
         header.get<"receiveTs">().value(9'876'543'210);
         header.get<"flags">().value(md::MdFlags{}.snapshot(true).mandatory(true));
-        msg.get<"clientId">().value(17); // response to SnapshotRequest
+        msg.get<"appId">().value(17); // response to SnapshotRequest
         msg.get<"requestId">().value(3);
         msg.get<"chunkNo">().value(0);
         msg.get<"lastChunk">().value(1);
@@ -272,8 +272,8 @@ TEST_SUITE("MdSchema") {
         auto decodedFlags = decoded.get<"header">().get<"flags">().value();
         REQUIRE(decodedFlags.snapshot());
         REQUIRE(decodedFlags.mandatory());
-        REQUIRE(decoded.get<"clientId">().present());
-        REQUIRE_EQ(decoded.get<"clientId">().value(), 17);
+        REQUIRE(decoded.get<"appId">().present());
+        REQUIRE_EQ(decoded.get<"appId">().value(), 17);
         REQUIRE_EQ(decoded.get<"requestId">().value(), 3);
         REQUIRE_EQ(decoded.get<"chunkNo">().value(), 0);
         REQUIRE_EQ(decoded.get<"lastChunk">().value(), 1);
@@ -304,7 +304,7 @@ TEST_SUITE("MdSchema") {
 
         auto msg = md::Snapshot::wrapAndApplyHeader(buffer);
         msg.get<"header">().get<"instrumentId">().value(42);
-        msg.get<"clientId">().reset(); // spontaneous snapshot: no addressee
+        msg.get<"appId">().reset(); // spontaneous snapshot: no addressee
         msg.get<"chunkNo">().value(1); // stats are empty in the remaining chunks
         msg.get<"lastChunk">().value(1);
         msg.get<"tradingState">().value(0);
@@ -315,7 +315,7 @@ TEST_SUITE("MdSchema") {
         auto mdHeader = md::MessageHeader{buffer.data()};
         auto decoded = md::Snapshot{buffer, mdHeader.sbeEncodedLength(), mdHeader.get<"blockLength">().value(),
             mdHeader.get<"version">().value()};
-        REQUIRE_FALSE(decoded.get<"clientId">().present());
+        REQUIRE_FALSE(decoded.get<"appId">().present());
         REQUIRE_EQ(decoded.get<"chunkNo">().value(), 1);
         REQUIRE_EQ(decoded.get<"bids">().count(), 0);
         REQUIRE_EQ(decoded.get<"asks">().count(), 0);
@@ -326,7 +326,7 @@ TEST_SUITE("MdSchema") {
         std::array<std::byte, 128> buffer{};
 
         auto request = md::SnapshotRequest::wrapAndApplyHeader(buffer);
-        request.get<"clientId">().value(17);
+        request.get<"appId">().value(17);
         request.get<"requestId">().value(3);
         request.get<"instrumentId">().value(42);
         request.get<"depth">().value(10);
@@ -335,13 +335,13 @@ TEST_SUITE("MdSchema") {
         REQUIRE_EQ(mdHeader.get<"schemaId">().value(), md::SnapshotRequest::sbeSchemaId());
         auto decoded = md::SnapshotRequest{buffer, mdHeader.sbeEncodedLength(), mdHeader.get<"blockLength">().value(),
             mdHeader.get<"version">().value()};
-        REQUIRE_EQ(decoded.get<"clientId">().value(), 17);
+        REQUIRE_EQ(decoded.get<"appId">().value(), 17);
         REQUIRE_EQ(decoded.get<"requestId">().value(), 3);
         REQUIRE_EQ(decoded.get<"instrumentId">().value(), 42);
         REQUIRE_EQ(decoded.get<"depth">().value(), 10);
 
         auto response = md::RequestComplete::wrapAndApplyHeader(buffer);
-        response.get<"clientId">().value(17);
+        response.get<"appId">().value(17);
         response.get<"requestId">().value(3);
         response.get<"status">().value(md::RequestStatus::Ok);
         response.get<"count">().value(4);
@@ -350,7 +350,7 @@ TEST_SUITE("MdSchema") {
         REQUIRE_EQ(responseHeader.get<"schemaId">().value(), md::RequestComplete::sbeSchemaId());
         auto decodedResponse = md::RequestComplete{buffer, responseHeader.sbeEncodedLength(),
             responseHeader.get<"blockLength">().value(), responseHeader.get<"version">().value()};
-        REQUIRE_EQ(decodedResponse.get<"clientId">().value(), 17);
+        REQUIRE_EQ(decodedResponse.get<"appId">().value(), 17);
         REQUIRE_EQ(decodedResponse.get<"requestId">().value(), 3);
         REQUIRE(decodedResponse.get<"status">().value() == md::RequestStatus::Ok);
         REQUIRE_EQ(decodedResponse.get<"count">().value(), 4);

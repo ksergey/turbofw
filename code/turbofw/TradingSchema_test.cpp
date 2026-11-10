@@ -33,7 +33,7 @@ TEST_SUITE("TradingSchema") {
         std::array<std::byte, 256> buffer{};
 
         auto request = trd::CreateContext::wrapAndApplyHeader(buffer);
-        request.get<"clientId">().value(17);
+        request.get<"appId">().value(17);
         request.get<"requestId">().value(3);
         request.get<"instrumentId">().value(42);
         request.get<"clientCode">().value("ALPHA");
@@ -44,14 +44,14 @@ TEST_SUITE("TradingSchema") {
         REQUIRE_EQ(mdHeader.get<"templateId">().value(), trd::CreateContext::sbeTemplateId());
         auto decoded = trd::CreateContext{buffer, mdHeader.sbeEncodedLength(), mdHeader.get<"blockLength">().value(),
             mdHeader.get<"version">().value()};
-        REQUIRE_EQ(decoded.get<"clientId">().value(), 17);
+        REQUIRE_EQ(decoded.get<"appId">().value(), 17);
         REQUIRE_EQ(decoded.get<"requestId">().value(), 3);
         REQUIRE_EQ(decoded.get<"instrumentId">().value(), 42);
         REQUIRE_EQ(decoded.get<"clientCode">().value(), std::string_view{"ALPHA"});
         REQUIRE_EQ(decoded.get<"account">().value(), std::string_view{"SPOT-ACC"});
 
         auto result = trd::ContextResult::wrapAndApplyHeader(buffer);
-        result.get<"clientId">().value(17);
+        result.get<"appId">().value(17);
         result.get<"requestId">().value(3);
         result.get<"contextId">().value(5);
         result.get<"result">().value(trd::ResultCode::Ok);
@@ -67,7 +67,7 @@ TEST_SUITE("TradingSchema") {
 
         std::array<std::byte, 256> failureBuffer{};
         auto failed = trd::ContextResult::wrapAndApplyHeader(failureBuffer);
-        failed.get<"clientId">().value(20);
+        failed.get<"appId">().value(20);
         failed.get<"requestId">().value(9);
         failed.get<"contextId">().reset(); // null if CreateContext failed
         failed.get<"result">().value(trd::ResultCode::UnknownInstrument);

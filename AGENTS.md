@@ -23,7 +23,7 @@ Every microservice owns exactly two queues:
   service's `MPSC` queue and reads the service's `Multicast` queue.
 - There are no per-client reply queues. Every reader of a `Multicast` queue sees all messages and must pick out the
   ones addressed to it, and the data it needs, by itself. Matching rules: market data by `instrumentId`; responses by
-  `(clientId, requestId)`; trading messages by `contextId` (plus `requestId` / `orderRef`).
+  `(appId, requestId)`; trading messages by `contextId` (plus `requestId` / `orderRef`).
 - A queue can carry two schemas: the service's own protocol (`md`, `meta` or `trd`) and `svc`. Demultiplex by
   `(schemaId, templateId)` from the SBE message header. `svc` templateIds start at 100.
 - Metadata publishes the queue names of market data services (`ServiceDefinition.dataQueue` is the `Multicast`
@@ -44,8 +44,8 @@ don't duplicate them here.
 
 ### Request / response conventions
 
-- `clientId` is a random 32-bit id chosen by the client (`0xFFFFFFFF` is null). `requestId` is chosen by the client.
-  A response echoes both. Spontaneous messages have `clientId = null` and `requestId = 0`.
+- `appId` is a random 32-bit id chosen by the client (`0xFFFFFFFF` is null). `requestId` is chosen by the client.
+  A response echoes both. Spontaneous messages have `appId = null` and `requestId = 0`.
 - Pattern: a request on `MPSC`, then zero or more responses on `Multicast`, then (for multi-message responses) a
   terminating `RequestComplete` carrying `count`.
 - There are no sequence numbers in the protocol. The design assumes the shared-memory queues do not lose messages;

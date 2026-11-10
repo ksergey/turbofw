@@ -56,7 +56,7 @@ TEST_SUITE("ServiceSchema") {
         std::array<std::byte, 64> buffer{};
 
         auto request = svc::SetLogLevel::wrapAndApplyHeader(buffer);
-        request.get<"clientId">().value(12);
+        request.get<"appId">().value(12);
         request.get<"requestId">().value(1);
         request.get<"level">().value(svc::LogLevel::Warn);
 
@@ -65,11 +65,11 @@ TEST_SUITE("ServiceSchema") {
         REQUIRE_GE(svc::SetLogLevel::sbeTemplateId(), 100u);
         auto decoded = svc::SetLogLevel{
             buffer, header.sbeEncodedLength(), header.get<"blockLength">().value(), header.get<"version">().value()};
-        REQUIRE_EQ(decoded.get<"clientId">().value(), 12);
+        REQUIRE_EQ(decoded.get<"appId">().value(), 12);
         REQUIRE(decoded.get<"level">().value() == svc::LogLevel::Warn);
 
         auto result = svc::SetLogLevelResult::wrapAndApplyHeader(buffer);
-        result.get<"clientId">().value(12);
+        result.get<"appId">().value(12);
         result.get<"requestId">().value(1);
         result.get<"status">().value(svc::RequestStatus::Ok);
         result.get<"level">().value(svc::LogLevel::Debug);

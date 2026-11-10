@@ -119,14 +119,14 @@
        consistent with the snapshot (guaranteed by the connector).
        header.flags: Snapshot is always set; Mandatory is set for spontaneous
        (recovery) snapshots.
-       Response to SnapshotRequest: clientId and requestId are copied from the request.
-       Spontaneous snapshot: clientId = null, requestId = 0.
+       Response to SnapshotRequest: appId and requestId are copied from the request.
+       Spontaneous snapshot: appId = null, requestId = 0.
        tradingState and stats are meaningful only in chunk 0; stats is empty in
        the remaining chunks. -->
   <sbe:message name="Snapshot" id="20">
     <field name="header"       id="1" type="MdHeader"/>
-    <field name="clientId"     id="2" type="ClientIdNULL" presence="optional"/>
-    <field name="requestId"    id="3" type="uint64"/>
+    <field name="appId"     id="2" type="AppIdNULL" presence="optional"/>
+    <field name="requestId"    id="3" type="RequestId"/>
     <field name="chunkNo"      id="4" type="uint16"/>
     <field name="lastChunk"    id="5" type="uint8"/>   <!-- 1 = last chunk -->
     <field name="tradingState" id="6" type="uint8"/>
@@ -154,8 +154,8 @@
 
   <!-- Response: Snapshot chunk(s) followed by RequestComplete. -->
   <sbe:message name="SnapshotRequest" id="30">
-    <field name="clientId"     id="1" type="ClientId"/>
-    <field name="requestId"    id="2" type="uint64"/>
+    <field name="appId"     id="1" type="AppId"/>
+    <field name="requestId"    id="2" type="RequestId"/>
     <field name="instrumentId" id="3" type="InstrumentId"/>
     <field name="depth"        id="4" type="uint16"/> <!-- 0 = full book, otherwise top-N levels per side -->
   </sbe:message>
@@ -163,8 +163,8 @@
   <!-- Terminates any request. count = number of response messages sent
        (for SnapshotRequest this is the number of chunks). -->
   <sbe:message name="RequestComplete" id="33">
-    <field name="clientId"  id="1" type="ClientId"/>
-    <field name="requestId" id="2" type="uint64"/>
+    <field name="appId"  id="1" type="AppId"/>
+    <field name="requestId" id="2" type="RequestId"/>
     <field name="status"    id="3" type="RequestStatus"/>
     <field name="count"     id="4" type="uint32"/>
   </sbe:message>

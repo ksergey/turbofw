@@ -37,22 +37,22 @@ struct TestSBEProducer : public testing::Producer, public mixin::SBESendMixin {
     using testing::Producer::Producer;
 };
 
-/// A send-hook mixin: stamps `clientId` into every message that carries the field, before the user callback
+/// A send-hook mixin: stamps `appId` into every message that carries the field, before the user callback
 /// has its say. Generic over the message type, so it works for both send() overloads.
-struct ClientIdStampMixin {
+struct AppIdStampMixin {
     template <typename M>
     auto updateBody(M msg) -> void {
-        if constexpr (requires { msg.template get<"clientId">(); }) {
-            msg.template get<"clientId">().value(7);
+        if constexpr (requires { msg.template get<"appId">(); }) {
+            msg.template get<"appId">().value(7);
         }
     }
 };
 
 /// Producer with the stamping mixin composed into `Mixins`: hook runs on send()
-struct StampingProducer : public testing::Producer, public mixin::SBESendMixin, public ClientIdStampMixin {
+struct StampingProducer : public testing::Producer, public mixin::SBESendMixin, public AppIdStampMixin {
     using testing::Producer::Producer;
 
-    using Mixins = mp::List<ClientIdStampMixin>;
+    using Mixins = mp::List<AppIdStampMixin>;
 };
 
 auto const kNoOpReceive = [](std::span<std::byte const>) {
@@ -168,7 +168,7 @@ TEST_SUITE("SBESendMixin") {
             auto header = msg.get<"header">();
             header.get<"instrumentId">().value(42);
             header.get<"flags">().value(md::MdFlags{}.snapshot(true).mandatory(true));
-            msg.get<"clientId">().value(17);
+            msg.get<"appId">().value(17);
             msg.get<"requestId">().value(3);
 
             auto bids = msg.get<"bids">(); // descending price
@@ -223,7 +223,7 @@ TEST_SUITE("SBESendMixin") {
         auto const sent = producer.send<trd::CreateContext>(
             {std::char_traits<char>::length(kClientCode), std::char_traits<char>::length(kAccount)},
             [](trd::CreateContext msg) {
-                msg.get<"clientId">().value(17);
+                msg.get<"appId">().value(17);
                 msg.get<"requestId">().value(3);
                 msg.get<"instrumentId">().value(42);
                 msg.get<"clientCode">().value("ALPHA");
@@ -237,7 +237,7 @@ TEST_SUITE("SBESendMixin") {
             REQUIRE_EQ(header.get<"templateId">().value(), trd::CreateContext::sbeTemplateId());
             auto msg = trd::CreateContext{std::span<std::byte>{const_cast<std::byte*>(buffer.data()), buffer.size()},
                 header.sbeEncodedLength(), header.get<"blockLength">().value(), header.get<"version">().value()};
-            REQUIRE_EQ(msg.get<"clientId">().value(), 17u);
+            REQUIRE_EQ(msg.get<"appId">().value(), 17u);
             REQUIRE_EQ(msg.get<"requestId">().value(), 3u);
             REQUIRE_EQ(msg.get<"instrumentId">().value(), 42u);
             REQUIRE_EQ(msg.get<"clientCode">().value(), std::string_view{kClientCode});
@@ -264,7 +264,7 @@ TEST_SUITE("SBESendMixin") {
             REQUIRE_EQ(header.get<"templateId">().value(), svc::SetLogLevel::sbeTemplateId());
             auto msg = svc::SetLogLevel{std::span<std::byte>{const_cast<std::byte*>(buffer.data()), buffer.size()},
                 header.sbeEncodedLength(), header.get<"blockLength">().value(), header.get<"version">().value()};
-            CHECK_EQ(msg.get<"clientId">().value(), 7u); // stamped by the hook, never touched by the callback
+            CHECK_EQ(msg.get<"appId">().value(), 7u); // stamped by the hook, never touched by the callback
             CHECK(msg.get<"level">().value() == svc::LogLevel::Trace);
         });
         CHECK_EQ(count, 1);
@@ -296,7 +296,7 @@ TEST_SUITE("SBESendMixin") {
             REQUIRE_EQ(header.get<"templateId">().value(), md::Snapshot::sbeTemplateId());
             auto msg = md::Snapshot{std::span<std::byte>{const_cast<std::byte*>(buffer.data()), buffer.size()},
                 header.sbeEncodedLength(), header.get<"blockLength">().value(), header.get<"version">().value()};
-            CHECK_EQ(msg.get<"clientId">().value(), 7u); // stamped by the hook through the vars overload
+            CHECK_EQ(msg.get<"appId">().value(), 7u); // stamped by the hook through the vars overload
             CHECK_EQ(msg.get<"header">().get<"instrumentId">().value(), 42u);
         });
         CHECK_EQ(snapshotCount, 1);

@@ -45,7 +45,7 @@ auto encodeSnapshot(std::span<std::byte> buffer) -> void {
     auto header = msg.get<"header">();
     header.get<"instrumentId">().value(42);
     header.get<"flags">().value(md::MdFlags{}.snapshot(true).mandatory(true));
-    msg.get<"clientId">().value(17);
+    msg.get<"appId">().value(17);
     msg.get<"requestId">().value(3);
 
     auto bids = msg.get<"bids">(); // descending price
@@ -61,7 +61,7 @@ auto encodeSnapshot(std::span<std::byte> buffer) -> void {
 /// Encode a trd::CreateContext with var-size data fields into a buffer
 auto encodeCreateContext(std::span<std::byte> buffer) -> void {
     auto msg = trd::CreateContext::wrapAndApplyHeader(buffer);
-    msg.get<"clientId">().value(17);
+    msg.get<"appId">().value(17);
     msg.get<"requestId">().value(3);
     msg.get<"instrumentId">().value(42);
     msg.get<"clientCode">().value("ALPHA");
@@ -102,7 +102,7 @@ TEST_SUITE("SBE") {
             },
             [&](trd::CreateContext msg) {
                 ++contextCalls;
-                CHECK_EQ(msg.get<"clientId">().value(), 17u);
+                CHECK_EQ(msg.get<"appId">().value(), 17u);
                 CHECK_EQ(msg.get<"instrumentId">().value(), 42u);
                 CHECK_EQ(msg.get<"clientCode">().value(), std::string_view{"ALPHA"});
                 CHECK_EQ(msg.get<"account">().value(), std::string_view{"SPOT-ACC"});

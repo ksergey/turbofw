@@ -16,7 +16,7 @@ TEST_SUITE("MetaSchema") {
         std::array<std::byte, 256> buffer{};
 
         auto msg = meta::RegisterService::wrapAndApplyHeader(buffer);
-        msg.get<"clientId">().value(17);
+        msg.get<"appId">().value(17);
         msg.get<"requestId">().value(3);
         msg.get<"reportedTs">().value(1'775'000'000'000'000'000);
         msg.get<"state">().value(meta::ServiceState::Active);
@@ -29,7 +29,7 @@ TEST_SUITE("MetaSchema") {
         REQUIRE_EQ(header.get<"templateId">().value(), meta::RegisterService::sbeTemplateId());
         auto decoded = meta::RegisterService{
             buffer, header.sbeEncodedLength(), header.get<"blockLength">().value(), header.get<"version">().value()};
-        REQUIRE_EQ(decoded.get<"clientId">().value(), 17);
+        REQUIRE_EQ(decoded.get<"appId">().value(), 17);
         REQUIRE_EQ(decoded.get<"requestId">().value(), 3);
         REQUIRE_EQ(decoded.get<"reportedTs">().value(), 1'775'000'000'000'000'000);
         REQUIRE(decoded.get<"state">().value() == meta::ServiceState::Active);
@@ -38,7 +38,7 @@ TEST_SUITE("MetaSchema") {
         REQUIRE_EQ(decoded.get<"requestQueue">().value(), std::string_view{"md-binance-1/req"});
 
         auto result = meta::RegisterServiceResult::wrapAndApplyHeader(buffer);
-        result.get<"clientId">().value(17);
+        result.get<"appId">().value(17);
         result.get<"requestId">().value(3);
         result.get<"status">().value(meta::RegisterStatus::Created);
         result.get<"serviceId">().value(3);
@@ -54,7 +54,7 @@ TEST_SUITE("MetaSchema") {
 
         std::array<std::byte, 128> failureBuffer{};
         auto rejected = meta::RegisterServiceResult::wrapAndApplyHeader(failureBuffer);
-        rejected.get<"clientId">().value(17);
+        rejected.get<"appId">().value(17);
         rejected.get<"requestId">().value(4);
         rejected.get<"status">().value(meta::RegisterStatus::Rejected);
         rejected.get<"serviceId">().reset(); // null if Rejected
@@ -70,7 +70,7 @@ TEST_SUITE("MetaSchema") {
         std::array<std::byte, 256> buffer{};
 
         auto msg = meta::RegisterInstrument::wrapAndApplyHeader(buffer);
-        msg.get<"clientId">().value(17);
+        msg.get<"appId">().value(17);
         msg.get<"requestId">().value(3);
         msg.get<"reportedTs">().value(1'775'000'000'000'000'000);
         auto attrs = msg.get<"attrs">();
@@ -111,7 +111,7 @@ TEST_SUITE("MetaSchema") {
         REQUIRE_EQ(decoded.get<"symbol">().value(), std::string_view{});
 
         auto result = meta::RegisterInstrumentResult::wrapAndApplyHeader(buffer);
-        result.get<"clientId">().value(17);
+        result.get<"appId">().value(17);
         result.get<"requestId">().value(3);
         result.get<"status">().value(meta::RegisterStatus::Created);
         result.get<"instrumentId">().value(42);
@@ -128,7 +128,7 @@ TEST_SUITE("MetaSchema") {
         std::array<std::byte, 256> buffer{};
 
         auto msg = meta::InstrumentDefinition::wrapAndApplyHeader(buffer);
-        msg.get<"clientId">().reset(); // spontaneous update on the multicast queue
+        msg.get<"appId">().reset(); // spontaneous update on the multicast queue
         msg.get<"requestId">().value(0);
         msg.get<"instrumentId">().value(42);
         msg.get<"version">().value(2);
@@ -151,7 +151,7 @@ TEST_SUITE("MetaSchema") {
         REQUIRE_EQ(header.get<"templateId">().value(), meta::InstrumentDefinition::sbeTemplateId());
         auto decoded = meta::InstrumentDefinition{
             buffer, header.sbeEncodedLength(), header.get<"blockLength">().value(), header.get<"version">().value()};
-        REQUIRE_FALSE(decoded.get<"clientId">().present());
+        REQUIRE_FALSE(decoded.get<"appId">().present());
         REQUIRE_EQ(decoded.get<"requestId">().value(), 0);
         REQUIRE_EQ(decoded.get<"instrumentId">().value(), 42);
         REQUIRE_EQ(decoded.get<"version">().value(), 2);
@@ -167,7 +167,7 @@ TEST_SUITE("MetaSchema") {
         std::array<std::byte, 128> buffer{};
 
         auto msg = meta::InstrumentRequest::wrapAndApplyHeader(buffer);
-        msg.get<"clientId">().value(17);
+        msg.get<"appId">().value(17);
         msg.get<"requestId">().value(5);
         msg.get<"instrumentId">().value(42);
         msg.get<"venueId">().reset();
@@ -191,7 +191,7 @@ TEST_SUITE("MetaSchema") {
         std::array<std::byte, 128> buffer{};
 
         auto msg = meta::ServiceRequest::wrapAndApplyHeader(buffer);
-        msg.get<"clientId">().value(17);
+        msg.get<"appId">().value(17);
         msg.get<"requestId">().value(5);
         msg.get<"serviceId">().reset();
         msg.get<"state">().reset();
@@ -209,7 +209,7 @@ TEST_SUITE("MetaSchema") {
         std::array<std::byte, 256> buffer{};
 
         auto msg = meta::ServiceDefinition::wrapAndApplyHeader(buffer);
-        msg.get<"clientId">().value(17); // response to ServiceRequest
+        msg.get<"appId">().value(17); // response to ServiceRequest
         msg.get<"requestId">().value(5);
         msg.get<"serviceId">().value(3);
         msg.get<"version">().value(4);
@@ -235,7 +235,7 @@ TEST_SUITE("MetaSchema") {
         std::array<std::byte, 64> buffer{};
 
         auto msg = meta::RequestComplete::wrapAndApplyHeader(buffer);
-        msg.get<"clientId">().value(17);
+        msg.get<"appId">().value(17);
         msg.get<"requestId">().value(5);
         msg.get<"status">().value(meta::RequestStatus::Ok);
         msg.get<"count">().value(2);

@@ -54,16 +54,16 @@
   <!-- Changes the log level of the service at runtime. Sent to the service's MPSC
        queue. Response: SetLogLevelResult on the multicast queue. -->
   <sbe:message name="SetLogLevel" id="102">
-    <field name="clientId"  id="1" type="ClientId"/>
-    <field name="requestId" id="2" type="uint64"/>
+    <field name="appId"  id="1" type="AppId"/>
+    <field name="requestId" id="2" type="RequestId"/>
     <field name="level"     id="3" type="LogLevel"/>
   </sbe:message>
 
   <!-- level: the log level in effect after the request (unchanged if the request
        was not Ok). status: Ok, or InvalidRequest for an unknown level. -->
   <sbe:message name="SetLogLevelResult" id="103">
-    <field name="clientId"  id="1" type="ClientId"/>
-    <field name="requestId" id="2" type="uint64"/>
+    <field name="appId"  id="1" type="AppId"/>
+    <field name="requestId" id="2" type="RequestId"/>
     <field name="status"    id="3" type="RequestStatus"/>
     <field name="level"     id="4" type="LogLevel"/>
   </sbe:message>
