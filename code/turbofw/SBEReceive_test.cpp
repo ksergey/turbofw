@@ -103,12 +103,8 @@ TEST_SUITE("SBEReceiveMixin") {
 
         // the expected message
         auto const beat = producer.send<svc::Heartbeat>([](svc::Heartbeat msg) {
-            msg.get<"clientId">().value(17);
-            msg.get<"requestId">().value(3);
+            msg.get<"timestamp">().value(222);
             msg.get<"serviceId">().value(1);
-            msg.get<"startTs">().value(111);
-            msg.get<"ts">().value(222);
-            msg.get<"intervalMs">().value(500);
             msg.get<"flags">().value(svc::ServiceFlags{}.start(true));
         });
         REQUIRE(beat);
@@ -122,8 +118,7 @@ TEST_SUITE("SBEReceiveMixin") {
         auto const [received, handled, dropped] =
             consumer.receive<mp::List<svc::Heartbeat>>([&calls](svc::Heartbeat msg) {
                 ++calls;
-                CHECK_EQ(msg.get<"clientId">().value(), 17u);
-                CHECK_EQ(msg.get<"intervalMs">().value(), 500u);
+                CHECK_EQ(msg.get<"timestamp">().value(), 222);
                 auto flags = msg.get<"flags">().value();
                 CHECK(flags.start());
             });
@@ -158,12 +153,8 @@ TEST_SUITE("SBEReceiveMixin") {
         auto consumer = OrderedConsumer{&queue, &log};
 
         auto const beat = producer.send<svc::Heartbeat>([](svc::Heartbeat msg) {
-            msg.get<"clientId">().value(11);
-            msg.get<"requestId">().value(2);
+            msg.get<"timestamp">().value(2);
             msg.get<"serviceId">().value(1);
-            msg.get<"startTs">().value(1);
-            msg.get<"ts">().value(2);
-            msg.get<"intervalMs">().value(1000);
             msg.get<"flags">().value(svc::ServiceFlags{});
         });
         REQUIRE(beat);

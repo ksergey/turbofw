@@ -6,7 +6,7 @@
     "queues": [
         // everything the service publishes (heartbeats)
         { "name": "heartbeat@events", "type": "multicast", "capacity": "64KiB" },
-        // requests from clients (HeartbeatRequest)
+        // requests to the service (opened by the example, not served)
         { "name": "heartbeat@cmd", "type": "mpsc", "length": 1024, "slot-size": "128B" }
     ]
 }

@@ -1,15 +1,15 @@
 // Copyright (c) Sergey Kovalevich <inndie@gmail.com>
 // SPDX-License-Identifier: MIT
 
-/// A minimal service that publishes svc::Heartbeat on its multicast queue and answers
-/// svc::HeartbeatRequest on its mpsc queue.
+/// A minimal service that publishes svc::Heartbeat on its multicast queue.
 ///
 /// Usage:
 ///     heartbeat <environment-config.json>
 ///
 /// The environment config (see the sample heartbeat.json next to this file) defines the service
 /// scope and the two queues every service owns: a multicast queue for everything published
-/// (heartbeats here) and an mpsc queue for requests (HeartbeatRequest here).
+/// (heartbeats here) and an mpsc queue for requests (this example opens one but serves none; a
+/// real service would answer e.g. SetLogLevel requests here).
 ///
 /// Run as many instances as you like: the scope differs per config, so the queue names and
 /// working directories don't collide.
@@ -17,7 +17,6 @@
 #include <chrono>
 #include <csignal>
 #include <cstdint>
-#include <optional>
 #include <span>
 #include <thread>
 #include <utility>
@@ -53,22 +52,11 @@ struct HeartbeatConsumer : public turboq::MPSCMessageQueue::Consumer, public tur
 };
 
 /// Publish a heartbeat on the multicast queue.
-/// @param request responding to a HeartbeatRequest when set (echoes clientId/requestId), spontaneous otherwise
-auto publishHeartbeat(HeartbeatProducer& producer, svc::ServiceFlags flags,
-    std::optional<std::pair<std::uint32_t, std::uint64_t>> request) -> bool {
+auto publishHeartbeat(HeartbeatProducer& producer, svc::ServiceFlags flags) -> bool {
     return producer
         .send<svc::Heartbeat>([&](svc::Heartbeat msg) {
-            if (request) {
-                msg.get<"clientId">().value(request->first); // response: echoes the request's ids
-                msg.get<"requestId">().value(request->second);
-            } else {
-                msg.get<"clientId">().reset(); // spontaneous heartbeat: no addressee
-                msg.get<"requestId">().value(0);
-            }
+            msg.get<"timestamp">().value(turbofw::realtimeNanos());
             msg.get<"serviceId">().reset(); // no id: the example is not registered in Metadata
-            msg.get<"startTs">().value(turbofw::realtimeNanos());
-            msg.get<"ts">().value(turbofw::realtimeNanos());
-            msg.get<"intervalMs">().value(kIntervalMs.count());
             msg.get<"flags">().value(flags);
         })
         .has_value();
@@ -110,36 +98,25 @@ auto main(int argc, char* argv[]) -> int {
     }
 
     // Start event: consumers treat everything of the previous service instance as invalid
-    publishHeartbeat(*producer, svc::ServiceFlags{}.start(true), std::nullopt);
+    publishHeartbeat(*producer, svc::ServiceFlags{}.start(true));
 
     auto nextHeartbeat = turbofw::monotonicNanos();
     while (!stopRequested) {
-        // Serve requests from the mpsc queue; messages are dispatched by (schemaId, templateId).
-        // receive() drains the queue, so all currently pending requests are served per iteration.
-        consumer->receive([&](std::span<std::byte const> buffer) {
-            auto const header = svc::MessageHeader{const_cast<std::byte*>(buffer.data())};
-            if (header.get<"schemaId">().value() == svc::HeartbeatRequest::sbeSchemaId() &&
-                header.get<"templateId">().value() == svc::HeartbeatRequest::sbeTemplateId()) {
-                auto request = svc::HeartbeatRequest{
-                    std::span<std::byte>{const_cast<std::byte*>(buffer.data()), buffer.size()},
-                    header.sbeEncodedLength(), header.get<"blockLength">().value(), header.get<"version">().value()};
-                std::println("heartbeat request from client {}", request.get<"clientId">().value());
-                publishHeartbeat(*producer, svc::ServiceFlags{},
-                    std::make_pair(request.get<"clientId">().value(), request.get<"requestId">().value()));
-            }
-        });
+        // Drain the mpsc queue: this example serves no requests; messages are dispatched by
+        // (schemaId, templateId), a real service would answer e.g. SetLogLevel here.
+        consumer->receive([&](std::span<std::byte const>) {});
 
-        // Periodic heartbeat when nothing else has been published for intervalMs
+        // Periodic heartbeat when nothing else has been published for a while
         auto const now = turbofw::monotonicNanos();
         if (now >= nextHeartbeat) {
             nextHeartbeat = now + kIntervalMs.count() * 1'000'000ull;
-            publishHeartbeat(*producer, svc::ServiceFlags{}, std::nullopt);
+            publishHeartbeat(*producer, svc::ServiceFlags{});
         }
 
         std::this_thread::sleep_for(std::chrono::milliseconds{1});
     }
 
     // Stop event: the service stops publishing, consumers clean up their state for it
-    publishHeartbeat(*producer, svc::ServiceFlags{}.stop(true), std::nullopt);
+    publishHeartbeat(*producer, svc::ServiceFlags{}.stop(true));
     return 0;
 }

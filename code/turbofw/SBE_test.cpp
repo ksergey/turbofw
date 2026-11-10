@@ -34,12 +34,8 @@ Overloaded(Fns...) -> Overloaded<Fns...>;
 /// Encode a svc::Heartbeat with fixed fields into a buffer
 auto encodeHeartbeat(std::span<std::byte> buffer) -> void {
     auto msg = svc::Heartbeat::wrapAndApplyHeader(buffer);
-    msg.get<"clientId">().value(17);
-    msg.get<"requestId">().value(3);
+    msg.get<"timestamp">().value(222);
     msg.get<"serviceId">().value(1);
-    msg.get<"startTs">().value(111);
-    msg.get<"ts">().value(222);
-    msg.get<"intervalMs">().value(500);
     msg.get<"flags">().value(svc::ServiceFlags{}.start(true));
 }
 
@@ -113,8 +109,8 @@ TEST_SUITE("SBE") {
             },
             [&](svc::Heartbeat msg) {
                 ++heartbeatCalls;
-                CHECK_EQ(msg.get<"clientId">().value(), 17u);
-                CHECK_EQ(msg.get<"intervalMs">().value(), 500u);
+                CHECK_EQ(msg.get<"serviceId">().value(), 1u);
+                CHECK_EQ(msg.get<"timestamp">().value(), 222);
             },
         };
         using Messages = mp::List<md::Snapshot, trd::CreateContext, svc::Heartbeat>;
@@ -155,7 +151,7 @@ TEST_SUITE("SBE") {
         auto const callback = [&calls](auto&&...) {
             ++calls;
         };
-        auto const result = turbofw::tryDecodeSBE<mp::List<svc::Heartbeat, svc::HeartbeatRequest>>(buffer, callback);
+        auto const result = turbofw::tryDecodeSBE<mp::List<svc::Heartbeat, md::Snapshot>>(buffer, callback);
         REQUIRE_FALSE(result);
         CHECK_EQ(calls, 0);
     }
@@ -215,7 +211,7 @@ TEST_SUITE("SBE") {
             },
             [&](svc::Heartbeat msg) {
                 ++heartbeatCalls;
-                CHECK_EQ(msg.get<"intervalMs">().value(), 500u);
+                CHECK_EQ(msg.get<"timestamp">().value(), 222);
             },
         };
 

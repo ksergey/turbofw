@@ -27,7 +27,7 @@ namespace turbofw::mixin {
 /// \code{.cpp}
 /// // no variable-size parts: no sizes argument
 /// producer.send<svc::Heartbeat>([](svc::Heartbeat msg) {
-///     msg.get<"startTs">().value(startTs);
+///     msg.get<"timestamp">().value(turbofw::realtimeNanos());
 /// });
 ///
 /// // repeating groups / data fields: their sizes first, then the callback

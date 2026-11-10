@@ -38,9 +38,9 @@ Every microservice owns exactly two queues:
 | Trading connector | `trd`, `svc` | `CreateContext`, `NewOrder`, `ReplaceOrder`, `CancelOrder`, `CancelAll`, `OrderStatusRequest` | `ContextResult`, `ExecutionReport`, `CommandReject`, `RequestComplete` |
 | Metadata | `meta`, `svc` | `RegisterService`, `RegisterInstrument`, `ServiceRequest`, `InstrumentRequest` | `RegisterServiceResult`, `RegisterInstrumentResult`, `ServiceDefinition`, `InstrumentDefinition`, `RequestComplete` |
 
-Every service additionally receives `svc::HeartbeatRequest` and `svc::SetLogLevel` on its `MPSC` queue and publishes
-`svc::Heartbeat` and `svc::SetLogLevelResult` on its `Multicast` queue. The schema files are the source of truth for
-message contents; don't duplicate them here.
+Every service additionally receives `svc::SetLogLevel` on its `MPSC` queue and publishes `svc::Heartbeat` and
+`svc::SetLogLevelResult` on its `Multicast` queue. The schema files are the source of truth for message contents;
+don't duplicate them here.
 
 ### Request / response conventions
 
@@ -53,15 +53,13 @@ message contents; don't duplicate them here.
 
 ### Service lifecycle
 
-- Every service publishes `svc::Heartbeat` on events (start, stop, state change) and, when it has published nothing
-  else for `intervalMs`, periodically. Flags: `Start` and `Stop` are events; `NotConnected` and `Recovering` are
+- Every service publishes `svc::Heartbeat` on events (start, stop, state change) and periodically while it has
+  published nothing else for a while. Flags: `Start` and `Stop` are events; `NotConnected` and `Recovering` are
   states repeated while they hold.
-- `startTs` identifies the service instance. A changed `startTs` (or the `Start` flag) means the service restarted
-  and everything a client derived from the previous instance is invalid: trading contexts must be created again,
-  market data state must be re-synchronized. A consumer treats a service as lost after a few missed heartbeat
-  intervals.
-- `HeartbeatRequest` makes the service publish a heartbeat immediately (for late joiners). `SetLogLevel` changes the
-  service's log level at runtime.
+- The `Start` heartbeat means the service restarted and everything a client derived from the previous instance
+  is invalid: trading contexts must be created again, market data state must be re-synchronized. A consumer
+  treats a service as lost when it stops receiving heartbeats (the heartbeat rate is the publisher's policy).
+- `SetLogLevel` changes the service's log level at runtime.
 - On startup a market data connector registers itself in Metadata (`RegisterService`), then every active instrument
   (`RegisterInstrument`, with `reportedTs`).
 
@@ -86,7 +84,7 @@ message contents; don't duplicate them here.
 ### Rules
 
 - Services depend on each other only through queues and schemas. Don't link one service's internals into another.
-- Every service must publish `svc::Heartbeat` and handle `HeartbeatRequest` and `SetLogLevel`.
+- Every service must publish `svc::Heartbeat` and handle `SetLogLevel`.
 - A new service type means: its two queues, its own schema (or an existing one) plus `svc`, and a row in the table
   above.
 

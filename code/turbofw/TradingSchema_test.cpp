@@ -25,7 +25,6 @@ TEST_SUITE("TradingSchema") {
         REQUIRE_NE(meta::InstrumentDefinition::sbeSchemaId(), svc::Heartbeat::sbeSchemaId());
         // service template ids start at 100 so they do not overlap protocol template ids
         REQUIRE_GE(svc::Heartbeat::sbeTemplateId(), 100u);
-        REQUIRE_GE(svc::HeartbeatRequest::sbeTemplateId(), 100u);
         REQUIRE_GE(svc::SetLogLevel::sbeTemplateId(), 100u);
         REQUIRE_GE(svc::SetLogLevelResult::sbeTemplateId(), 100u);
     }

@@ -134,15 +134,10 @@ TEST_SUITE("SBESendMixin") {
 
         CHECK_EQ(consumer.receive(kNoOpReceive), 0);
 
-        auto constexpr kStartTs = std::int64_t{111};
-        auto constexpr kIntervalMs = std::uint32_t{500};
+        auto constexpr kTimestamp = std::int64_t{222};
         auto const sent = producer.send<svc::Heartbeat>([&](svc::Heartbeat msg) {
-            msg.get<"clientId">().value(17);
-            msg.get<"requestId">().value(3);
+            msg.get<"timestamp">().value(kTimestamp);
             msg.get<"serviceId">().value(1);
-            msg.get<"startTs">().value(kStartTs);
-            msg.get<"ts">().value(222);
-            msg.get<"intervalMs">().value(kIntervalMs);
             msg.get<"flags">().value(svc::ServiceFlags{}.start(true));
         });
         REQUIRE(sent);
@@ -153,11 +148,8 @@ TEST_SUITE("SBESendMixin") {
             REQUIRE_EQ(header.get<"templateId">().value(), svc::Heartbeat::sbeTemplateId());
             auto msg = svc::Heartbeat{std::span<std::byte>{const_cast<std::byte*>(buffer.data()), buffer.size()},
                 header.sbeEncodedLength(), header.get<"blockLength">().value(), header.get<"version">().value()};
-            REQUIRE_EQ(msg.get<"clientId">().value(), 17u);
-            REQUIRE_EQ(msg.get<"requestId">().value(), 3u);
             REQUIRE_EQ(msg.get<"serviceId">().value(), 1u);
-            REQUIRE_EQ(msg.get<"startTs">().value(), kStartTs);
-            REQUIRE_EQ(msg.get<"intervalMs">().value(), kIntervalMs);
+            REQUIRE_EQ(msg.get<"timestamp">().value(), kTimestamp);
             auto flags = msg.get<"flags">().value();
             REQUIRE(flags.start());
         });
@@ -260,22 +252,20 @@ TEST_SUITE("SBESendMixin") {
         auto producer = StampingProducer{&queue};
         auto consumer = TestConsumer{&queue};
 
-        // the fixed-message overload: the hook stamps clientId=7, the user callback leaves it alone -- a
-        // zeroed buffer otherwise, so 7 proves the hook encoded into the buffer
-        auto const fixed = producer.send<svc::Heartbeat>([](svc::Heartbeat msg) {
-            msg.get<"startTs">().value(111);
-            msg.get<"ts">().value(222);
+        // the fixed-message overload: the hook stamps clientId=7 (SetLogLevel), the user callback leaves it
+        // alone -- a zeroed buffer otherwise, so 7 proves the hook encoded into the buffer
+        auto const fixed = producer.send<svc::SetLogLevel>([](svc::SetLogLevel msg) {
+            msg.get<"level">().value(svc::LogLevel::Trace);
         });
         REQUIRE(fixed);
 
         auto const count = consumer.receive([&](std::span<std::byte const> buffer) {
             auto const header = svc::MessageHeader{const_cast<std::byte*>(buffer.data())};
-            REQUIRE_EQ(header.get<"templateId">().value(), svc::Heartbeat::sbeTemplateId());
-            auto msg = svc::Heartbeat{std::span<std::byte>{const_cast<std::byte*>(buffer.data()), buffer.size()},
+            REQUIRE_EQ(header.get<"templateId">().value(), svc::SetLogLevel::sbeTemplateId());
+            auto msg = svc::SetLogLevel{std::span<std::byte>{const_cast<std::byte*>(buffer.data()), buffer.size()},
                 header.sbeEncodedLength(), header.get<"blockLength">().value(), header.get<"version">().value()};
             CHECK_EQ(msg.get<"clientId">().value(), 7u); // stamped by the hook, never touched by the callback
-            CHECK_EQ(msg.get<"startTs">().value(), 111);
-            CHECK_EQ(msg.get<"ts">().value(), 222);
+            CHECK(msg.get<"level">().value() == svc::LogLevel::Trace);
         });
         CHECK_EQ(count, 1);
 

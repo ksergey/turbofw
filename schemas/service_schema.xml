@@ -9,7 +9,7 @@
                    package="svc" id="4" version="0" semanticVersion="0.1"
                    byteOrder="littleEndian" description="Service">
 
-  <!-- messageHeader, ServiceIdNULL, ClientId, ClientIdNULL, Timestamp -->
+  <!-- messageHeader, ServiceIdNULL, ClientId, Timestamp -->
   <xi:include href="common_types.xml"/>
 
   <types>
@@ -40,30 +40,15 @@
     </enum>
   </types>
 
-  <!-- Published on events (flags change, start, stop) and, when the service has not
-       published anything else for intervalMs, periodically.
-       clientId = null, requestId = 0 for spontaneous heartbeats; the response to
-       HeartbeatRequest echoes clientId and requestId.
-       A consumer should treat the service as lost when it has received nothing
-       from it for several intervalMs.
-       startTs identifies the service instance: a change means the service restarted,
-       even if the Start heartbeat was missed. -->
+  <!-- Published on events (flags change, start, stop) and periodically; how often is the
+       publisher's policy.
+       A consumer should treat the service as lost when it has received nothing from it for
+       a while. The Start heartbeat means the service restarted: all state the previous
+       instance kept is gone, even if the Start heartbeat was lost. -->
   <sbe:message name="Heartbeat" id="100">
-    <field name="clientId"   id="1" type="ClientIdNULL"  presence="optional"/>
-    <field name="requestId"  id="2" type="uint64"/>
-    <field name="serviceId"  id="3" type="ServiceIdNULL" presence="optional"/> <!-- null if the service has no id -->
-    <field name="startTs"    id="4" type="Timestamp"/>   <!-- start time of this service instance -->
-    <field name="ts"         id="5" type="Timestamp"/>   <!-- time the heartbeat was published -->
-    <field name="intervalMs" id="6" type="uint32"/>      <!-- idle heartbeat interval, 0 = no periodic heartbeats -->
-    <field name="flags"      id="7" type="ServiceFlags"/>
-  </sbe:message>
-
-  <!-- Sent to the service's MPSC queue. Response: Heartbeat on the multicast queue.
-       Lets a late-joining consumer learn the current state without waiting for the
-       next periodic heartbeat. -->
-  <sbe:message name="HeartbeatRequest" id="101">
-    <field name="clientId"  id="1" type="ClientId"/>
-    <field name="requestId" id="2" type="uint64"/>
+    <field name="timestamp" id="1" type="Timestamp"/>  <!-- time the heartbeat was published -->
+    <field name="serviceId" id="2" type="ServiceIdNULL" presence="optional"/> <!-- null if the service has no id -->
+    <field name="flags"     id="3" type="ServiceFlags"/>
   </sbe:message>
 
   <!-- Changes the log level of the service at runtime. Sent to the service's MPSC

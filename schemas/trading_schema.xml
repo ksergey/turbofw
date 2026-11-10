@@ -12,8 +12,8 @@
           contextId in ContextResult. clientId + requestId match that single response.
           A context lives until the connector restarts. How contextId is allocated and how
           creation parameters are stored is up to the connector. After a restart all
-          contexts are gone: clients detect it by the service Heartbeat (Start flag or a
-          changed startTs, see service_schema.xml) and must create their contexts again.
+          contexts are gone: clients detect it by the service Heartbeat (Start flag,
+          see service_schema.xml) and must create their contexts again.
        2. All order commands carry contextId. The client identifies its orders with
           orderRef, chosen by the client and unique within a context.
           The connector generates ClOrdID (venue-specific) and keeps the mapping
