@@ -101,6 +101,24 @@ concept SBEHasField = SBEMessage<M> && requires { typename detail::MessageFields
                           mp::Size<detail::MessageFields<M>>::value) &&
                       requires { typename SBEFieldOf<M, N>::ValueType; };
 
+/// The schema null value of the field N of the generated SBE message M, a constexpr variable: what the
+/// field's decoder treats as absent -- the exact constant the ref compares against in `present()`. For a
+/// plain scalar it is the raw sentinel (`std::numeric_limits<std::uint32_t>::max()`, a NaN for
+/// float/double), for an enum member the enum class `SBE_NULL` constant, and for an optional composite the
+/// default constructed composite class.
+///
+/// Formed only for nullable fields (presence="optional"): required fields, constant fields, group and data
+/// fields have no `NullValue` member -- use the concept `SBEHasFieldNull` for the soft check.
+template <typename M, CtString N>
+inline constexpr auto SBEFieldNullValueOf = SBEFieldOf<M, N>::NullValue;
+
+/// Checks M is a generated SBE message with a nullable (presence="optional") field named N; group and data
+/// fields count as absent, so do required and constant ones. Unlike `SBEFieldNullValueOf` itself this is the
+/// soft form: fold it in via `if constexpr` / `requires` instead of instantiating the variable template
+/// directly on an unverified name.
+template <typename M, CtString N>
+concept SBEHasFieldNull = SBEHasField<M, N> && requires { SBEFieldOf<M, N>::NullValue; };
+
 /// Demultiplexes an SBE message buffer: tries every message type of the list L against the header, the first
 /// one whose (schemaId, templateId) pair matches is decoded and passed to `fn`; returns whether any did.
 ///

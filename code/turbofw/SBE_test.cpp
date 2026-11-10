@@ -282,6 +282,40 @@ TEST_SUITE("SBE field type") {
 
         CHECK(true);
     }
+
+    TEST_CASE("field null value matches the schema null of nullable fields") {
+        // optional plain scalar: the raw sentinel the decoder compares against
+        static_assert(
+            turbofw::SBEFieldNullValueOf<md::MbpUpdate, "orders"> == std::numeric_limits<std::uint32_t>::max());
+        static_assert(std::is_same_v<std::remove_cv_t<decltype(turbofw::SBEFieldNullValueOf<md::MbpUpdate, "orders">)>,
+            std::uint32_t>);
+        static_assert(
+            turbofw::SBEFieldNullValueOf<svc::Heartbeat, "serviceId"> == std::numeric_limits<std::uint16_t>::max());
+
+        // optional enum: the enum class SBE_NULL constant
+        static_assert(turbofw::SBEFieldNullValueOf<md::Trade, "aggressor"> == md::Side::SBE_NULL);
+        static_assert(
+            std::is_same_v<std::remove_cv_t<decltype(turbofw::SBEFieldNullValueOf<md::Trade, "aggressor">)>, md::Side>);
+
+        // optional composite: a default constructed composite class
+        static_assert(std::is_same_v<std::remove_cv_t<decltype(turbofw::SBEFieldNullValueOf<md::MbpUpdate, "price">)>,
+            md::Price9NULL>);
+
+        CHECK(true);
+    }
+
+    TEST_CASE("SBEHasFieldNull: nullable fields are, required ones and groups are not") {
+        static_assert(turbofw::SBEHasFieldNull<md::MbpUpdate, "price">);
+        static_assert(turbofw::SBEHasFieldNull<md::Trade, "aggressor">);
+        static_assert(turbofw::SBEHasFieldNull<svc::Heartbeat, "serviceId">);
+        // required fields and repeating groups carry no NullValue
+        static_assert(!turbofw::SBEHasFieldNull<md::Trade, "price">);
+        static_assert(!turbofw::SBEHasFieldNull<trd::NewOrder, "requestId">);
+        static_assert(!turbofw::SBEHasFieldNull<md::MbpUpdate, "bids">);
+        static_assert(!turbofw::SBEHasFieldNull<int, "anything">);
+
+        CHECK(true);
+    }
 }
 
 } // namespace turbofw::testing
