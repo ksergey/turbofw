@@ -17,7 +17,7 @@ using ServiceId = StrongType<SBEFieldValueOf<svc::Heartbeat, "serviceId">, struc
 using AppId = StrongType<SBEFieldValueOf<svc::SetLogLevel, "appId">, struct AppId_Tag,
     SBEFieldNullValueOf<svc::SetLogLevel, "appId">>;
 
-/// The id of a client request, chosen by the client; `0` means unsolicited/spontaneous
+/// The id of a client request, chosen by the client; `null` means unsolicited/spontaneous, `0` is a valid id
 using RequestId = StrongType<SBEFieldValueOf<svc::SetLogLevel, "requestId">, struct RequestId_Tag,
     SBEFieldNullValueOf<svc::SetLogLevel, "requestId">>;
 

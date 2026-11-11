@@ -54,7 +54,7 @@
   <!-- Changes the log level of the service at runtime. Sent to the service's MPSC
        queue. Response: SetLogLevelResult on the multicast queue. -->
   <sbe:message name="SetLogLevel" id="102">
-    <field name="appId"     id="1" type="AppIdNULL"/>
+    <field name="appId"     id="1" type="AppIdNULL" presence="optional"/> <!-- null if the request has no appId -->
     <field name="requestId" id="2" type="RequestIdNULL" presence="optional"/>
     <field name="level"     id="3" type="LogLevel"/>
   </sbe:message>

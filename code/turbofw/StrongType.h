@@ -15,7 +15,7 @@ template <auto NoValue>
 struct Optional {
     template <typename T>
     struct modifier {
-        /// Return true on object hold valid value and false whe no value
+        /// Returns true when the object holds a valid value, false when it holds no value
         constexpr auto hasValue() const noexcept -> bool {
             using value_type = strong::underlying_type_t<T>;
             auto const& self = static_cast<T const&>(*this);

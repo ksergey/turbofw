@@ -1,34 +1,47 @@
 // Copyright (c) Sergey Kovalevich <inndie@gmail.com>
 // SPDX-License-Identifier: MIT
 
-/// A minimal service that publishes svc::Heartbeat on its multicast queue.
+/// A minimal service that publishes svc::Heartbeat on its multicast queue, showcasing SBEKeepAliveMixin:
+/// a Start heartbeat on startHeartbeating(), periodic ones while the wire is silent, a Stop one on
+/// stopHeartbeating(). The service's mpsc queue is opened but serves nothing (a real service would
+/// answer e.g. SetLogLevel requests there).
 ///
 /// Usage:
-///     heartbeat <environment-config.json>
-///
-/// The environment config (see the sample heartbeat.json next to this file) defines the service
-/// scope and the two queues every service owns: a multicast queue for everything published
-/// (heartbeats here) and an mpsc queue for requests (this example opens one but serves none; a
-/// real service would answer e.g. SetLogLevel requests here).
-///
-/// Run as many instances as you like: the scope differs per config, so the queue names and
-/// working directories don't collide.
+///     heartbeat -e env.json
+///     heartbeat -e env.json -i 1000
 
 #include <chrono>
 #include <csignal>
+#include <filesystem>
+#include <print>
 #include <span>
 #include <thread>
-#include <utility>
 
-#include <print>
+#include <cxxopts.hpp>
 
-#include <turbofw/Clock.h>
 #include <turbofw/Environment.h>
+#include <turbofw/ProducerConsumerTraits.h>
 #include <turbofw/mixin/ReceiveMixin.h>
 #include <turbofw/mixin/SBEKeepAliveMixin.h>
 #include <turbofw/mixin/SBESendMixin.h>
-#include <turbofw/mp/List.h>
-#include <turbofw/svc/schema.h>
+#include <turbofw/mixin/SBEServiceIdStampMixin.h>
+#include <turboq/MPSCMessageQueue.h>
+#include <turboq/MulticastMessageQueue.h>
+
+// clang-format off
+using Producer = turbofw::MakeProducer<turboq::MulticastMessageQueue::Producer,
+    turbofw::Mixins<
+        turbofw::mixin::SBESendMixin,
+        turbofw::mixin::SBEKeepAliveMixin,
+        turbofw::mixin::SBEServiceIdStampMixin
+    >
+>;
+using Consumer = turbofw::MakeConsumer<turboq::MPSCMessageQueue::Consumer,
+    turbofw::Mixins<
+        turbofw::mixin::ReceiveMixin
+    >
+>;
+// clang-format on
 
 namespace {
 
@@ -38,83 +51,69 @@ extern "C" auto onStop(int) -> void {
     stopRequested = 1;
 }
 
-constexpr auto kHeartbeatInterval = std::chrono::duration<std::uint32_t, std::milli>{500};
-
-/// Multicast producer composed with the SBE send mixin and the keep-alive mixin
-struct HeartbeatProducer : public turboq::MulticastMessageQueue::Producer,
-                           public turbofw::mixin::SBESendMixin,
-                           public turbofw::mixin::SBEKeepAliveMixin {
-    explicit HeartbeatProducer(turboq::MulticastMessageQueue::Producer producer) noexcept
-        : turboq::MulticastMessageQueue::Producer{std::move(producer)} {}
-
-    using Mixins = turbofw::mp::List<turbofw::mixin::SBEKeepAliveMixin>;
-
-    /// Stamp serviceId into every published heartbeat; the keep-alive mixin handles Start/Stop and periodic ones
-    template <typename M>
-    auto updateBody(M msg) noexcept -> void {
-        if constexpr (requires { msg.template get<"serviceId">(); }) {
-            msg.template get<"serviceId">().reset(); // no id: the example is not registered in Metadata
-        }
-    }
-};
-
-/// mpsc consumer composed with the receive mixin
-struct HeartbeatConsumer : public turboq::MPSCMessageQueue::Consumer, public turbofw::mixin::ReceiveMixin {
-    explicit HeartbeatConsumer(turboq::MPSCMessageQueue::Consumer consumer) noexcept
-        : turboq::MPSCMessageQueue::Consumer{std::move(consumer)} {}
-};
-
 } // namespace
 
-auto main(int argc, char* argv[]) -> int {
-    if (argc < 2) {
-        std::println(stderr, "usage: {} <environment-config.json>", argv[0]);
-        return 1;
+int main(int argc, char* argv[]) {
+    try {
+        auto options = cxxopts::Options{"heartbeat", "Heartbeat service example (SBEKeepAliveMixin)"};
+
+        // clang-format off
+        options.add_options()
+            ("e,env", "Path to environment config", cxxopts::value<std::filesystem::path>(), "PATH")
+            ("i,interval", "Heartbeat interval, ms", cxxopts::value<std::uint32_t>()->default_value("500"), "MS")
+            ("h,help", "Print this help and exit")
+        ;
+        // clang-format on
+
+        auto const parseResult = options.parse(argc, argv);
+        if (parseResult.count("help")) {
+            std::print(stderr, "{}\n", options.help({"", "Group"}));
+            return EXIT_FAILURE;
+        }
+
+        if (!parseResult.count("env")) {
+            throw std::runtime_error{"option '-env' is mandatory"};
+        }
+
+        std::signal(SIGINT, &onStop);
+        std::signal(SIGTERM, &onStop);
+
+        auto const env = turbofw::Environment::loadFromConfig(parseResult["env"].as<std::filesystem::path>());
+        if (!env) {
+            throw std::runtime_error{env.error()};
+        }
+
+        auto producer = env->createProducer<Producer>("heartbeat@data", false);
+        if (!producer) {
+            throw std::runtime_error{producer.error()};
+        }
+        auto consumer = env->createConsumer<Consumer>("heartbeat@cmd", false);
+        if (!consumer) {
+            throw std::runtime_error{consumer.error()};
+        }
+
+        // Start event: consumers treat everything of the previous service instance as invalid;
+        // afterwards the keep-alive mixin publishes one heartbeat per interval of wire silence.
+        // No serviceId: the example is not registered in Metadata, heartbeats carry a null one.
+        auto const interval = std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::milliseconds{parseResult["interval"].as<std::uint32_t>()});
+        producer->startHeartbeating(interval);
+
+        while (!stopRequested) {
+            // Drain the mpsc queue: this example serves no requests
+            consumer->receive([](std::span<std::byte const>) {});
+
+            // Periodic heartbeat when nothing else has been published for the configured interval
+            producer->keepAlive();
+
+            std::this_thread::sleep_for(std::chrono::milliseconds{1});
+        }
+
+        // Stop event: the service stops publishing, consumers clean up their state for it
+        producer->stopHeartbeating();
+
+    } catch (std::exception const& e) {
+        std::print(stderr, "ERROR: {}\n", e.what());
     }
-    std::signal(SIGINT, &onStop);
-    std::signal(SIGTERM, &onStop);
-
-    // The service name is only known at startup, pass it as a ${NAME} variable; the expanded
-    // scope becomes ${SCOPE} for the rest of the config.
-    auto vars = turbofw::Environment::Vars{{"NAME", "heartbeat"}};
-
-    // The config has no queue names to discover here: the service owns a fixed set of queues,
-    // a production service would resolve its peers' queues through Metadata instead.
-    auto env = turbofw::Environment::loadFromConfig(argv[1], std::move(vars));
-    if (!env) [[unlikely]] {
-        std::println(stderr, "can't load \"{}\": {}", argv[1], env.error());
-        return 1;
-    }
-    std::println("scope: {}, working directory: {}", env->scope(), env->workingDirectory().string());
-
-    // Open the service's own queues; they are created with options from the config if missing
-    auto producer = env->createProducer<HeartbeatProducer>("heartbeat@events", false);
-    if (!producer) [[unlikely]] {
-        std::println(stderr, "can't create producer: {}", producer.error());
-        return 1;
-    }
-    auto consumer = env->createConsumer<HeartbeatConsumer>("heartbeat@cmd", false);
-    if (!consumer) [[unlikely]] {
-        std::println(stderr, "can't create consumer: {}", consumer.error());
-        return 1;
-    }
-
-    // Start event: consumers treat everything of the previous service instance as invalid;
-    // afterwards the keep-alive mixin publishes one heartbeat per interval of wire silence
-    producer->startHeartbeating(std::chrono::duration_cast<std::chrono::nanoseconds>(kHeartbeatInterval));
-
-    while (!stopRequested) {
-        // Drain the mpsc queue: this example serves no requests; messages are dispatched by
-        // (schemaId, templateId), a real service would answer e.g. SetLogLevel here.
-        consumer->receive([&](std::span<std::byte const>) {});
-
-        // Periodic heartbeat when nothing else has been published for the configured interval
-        producer->keepAlive();
-
-        std::this_thread::sleep_for(std::chrono::milliseconds{1});
-    }
-
-    // Stop event: the service stops publishing, consumers clean up their state for it
-    producer->stopHeartbeating();
-    return 0;
+    return EXIT_SUCCESS;
 }

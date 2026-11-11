@@ -66,6 +66,11 @@ struct TaggedConsumer : public testing::Consumer,
     using Mixins = mp::List<TagMixin<'a'>, HooklessMixin, Filter>;
 };
 
+/// A consumer with no other mixins: proves receive() works on a plain composition without `Mixins`
+struct PlainConsumer : public testing::Consumer, public mixin::SBEReceiveMixin {
+    using testing::Consumer::Consumer;
+};
+
 /// Two tag mixins in one `Mixins` list: proves the hooks run in the list order
 struct OrderedConsumer : public testing::Consumer,
                          public mixin::SBEReceiveMixin,
@@ -143,6 +148,33 @@ TEST_SUITE("SBEReceiveMixin") {
         CHECK_EQ(empty, 0);
         CHECK_EQ(emptyHandled, 0);
         CHECK_EQ(emptyDropped, 0);
+    }
+
+    TEST_CASE("receive<M> handles the single message type given, the rest count as received only") {
+        auto queue = testing::Queue{};
+        auto producer = TestSBEProducer{&queue};
+        auto consumer = PlainConsumer{&queue};
+
+        auto const foreign = producer.send<svc::SetLogLevel>([](svc::SetLogLevel msg) {
+            msg.get<"level">().value(svc::LogLevel::Warn);
+        });
+        REQUIRE(foreign);
+        auto const beat = producer.send<svc::Heartbeat>([](svc::Heartbeat msg) {
+            msg.get<"ts">().value(7);
+            msg.get<"serviceId">().value(2);
+            msg.get<"flags">().value(svc::ServiceFlags{});
+        });
+        REQUIRE(beat);
+
+        auto calls = 0;
+        auto const [received, handled, dropped] = consumer.receive<svc::Heartbeat>([&calls](svc::Heartbeat msg) {
+            ++calls;
+            CHECK_EQ(msg.get<"ts">().value(), 7);
+        });
+        CHECK_EQ(received, 2);
+        CHECK_EQ(handled, 1);
+        CHECK_EQ(dropped, 0); // the SetLogLevel has a readable header, it is foreign, not garbage
+        CHECK_EQ(calls, 1);
     }
 
     TEST_CASE("hooks run in `Mixins` list order for every readable-buffer message") {

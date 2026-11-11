@@ -31,7 +31,7 @@ int main(int argc, char* argv[]) {
         // clang-format off
         options.add_options()
             ("e,env", "Path to environment config", cxxopts::value<std::filesystem::path>(), "PATH")
-            ("service-id", "Heartbeater serviceId", cxxopts::value<std::uint32_t>(), "NUMBER")
+            ("service-id", "Heartbeater serviceId", cxxopts::value<std::uint16_t>(), "NUMBER")
             ("h,help", "Print this help and exit")
         ;
         // clang-format on
@@ -57,7 +57,7 @@ int main(int argc, char* argv[]) {
         }
 
         if (parseResult.count("service-id")) {
-            auto const serviceId = turbofw::ServiceId{parseResult["service-id"].as<std::uint32_t>()};
+            auto const serviceId = turbofw::ServiceId{parseResult["service-id"].as<std::uint16_t>()};
             producer->setServiceId(serviceId);
         }
 

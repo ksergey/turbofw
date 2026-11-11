@@ -8,7 +8,6 @@
 
 #include <cxxopts.hpp>
 
-#include <turbofw/Clock.h>
 #include <turbofw/Environment.h>
 #include <turbofw/ProducerConsumerTraits.h>
 #include <turbofw/Types.h>
@@ -61,10 +60,6 @@ int main(int argc, char* argv[]) {
 
                 std::print("ts: {}, serviceId: {}\n", ts, serviceId);
             });
-            // auto const sent = producer->send<svc::Heartbeat>([](auto body) {
-            //     body.template get<"ts">().value(turbofw::realtimeNanos());
-            //     body.template get<"flags">().value(svc::ServiceFlags{});
-            // });
             std::this_thread::sleep_for(std::chrono::microseconds{10});
         }
 
