@@ -46,7 +46,7 @@
        a while. The Start heartbeat means the service restarted: all state the previous
        instance kept is gone, even if the Start heartbeat was lost. -->
   <sbe:message name="Heartbeat" id="100">
-    <field name="ts" id="1" type="Timestamp"/>  <!-- time the heartbeat was published -->
+    <field name="ts"        id="1" type="Timestamp"/>  <!-- time the heartbeat was published -->
     <field name="serviceId" id="2" type="ServiceIdNULL" presence="optional"/> <!-- null if the service has no id -->
     <field name="flags"     id="3" type="ServiceFlags"/>
   </sbe:message>
@@ -54,7 +54,7 @@
   <!-- Changes the log level of the service at runtime. Sent to the service's MPSC
        queue. Response: SetLogLevelResult on the multicast queue. -->
   <sbe:message name="SetLogLevel" id="102">
-    <field name="appId"  id="1" type="AppId"/>
+    <field name="appId"     id="1" type="AppIdNULL"/>
     <field name="requestId" id="2" type="RequestIdNULL" presence="optional"/>
     <field name="level"     id="3" type="LogLevel"/>
   </sbe:message>
@@ -62,7 +62,7 @@
   <!-- level: the log level in effect after the request (unchanged if the request
        was not Ok). status: Ok, or InvalidRequest for an unknown level. -->
   <sbe:message name="SetLogLevelResult" id="103">
-    <field name="appId"  id="1" type="AppId"/>
+    <field name="appId"     id="1" type="AppIdNULL" presence="optional"/>
     <field name="requestId" id="2" type="RequestIdNULL" presence="optional"/>
     <field name="status"    id="3" type="RequestStatus"/>
     <field name="level"     id="4" type="LogLevel"/>

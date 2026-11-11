@@ -6,9 +6,10 @@
 #include <cstdint>
 #include <limits>
 
-#include "detail/Random.h"
 #include <turbofw/SBE.h>
 #include <turbofw/Types.h>
+
+#include "detail/Random.h"
 
 namespace turbofw::mixin {
 
@@ -20,6 +21,9 @@ namespace turbofw::mixin {
 /// a response echoes the ids of its request, so a service must not compose this mixin. Single-threaded, like any
 /// turboq producer.
 class SBEAppIdStampMixin {
+private:
+    AppId appId_;
+
 public:
     /// A fresh random appId
     SBEAppIdStampMixin() noexcept : appId_{randomAppId()} {}
@@ -41,7 +45,7 @@ public:
     template <typename M>
     auto updateBody([[maybe_unused]] M msg) noexcept -> void {
         if constexpr (SBEHasField<M, "appId">) {
-            msg.template get<"appId">().value(appId_.value_of());
+            msg.template get<"appId">().value(value_of(appId_));
         }
     }
 
@@ -54,8 +58,6 @@ private:
         }
         return AppId{id};
     }
-
-    AppId appId_;
 };
 
 } // namespace turbofw::mixin

@@ -6,9 +6,10 @@
 #include <cstdint>
 #include <limits>
 
-#include "detail/Random.h"
 #include <turbofw/SBE.h>
 #include <turbofw/Types.h>
+
+#include "detail/Random.h"
 
 namespace turbofw::mixin {
 

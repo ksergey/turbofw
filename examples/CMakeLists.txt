@@ -7,5 +7,8 @@ foreach (file ${ExampleSources})
     add_executable(example-${name}
         ${file})
     target_link_libraries(example-${name}
-        PRIVATE turbofw::turbofw)
+        PRIVATE turbofw::turbofw cxxopts::cxxopts)
+    target_compile_definitions(example-${name} PRIVATE CXXOPTS_NO_RTTI)
 endforeach()
+
+file(COPY env.json DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
