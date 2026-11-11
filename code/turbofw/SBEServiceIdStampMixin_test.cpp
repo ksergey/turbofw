@@ -59,7 +59,7 @@ TEST_SUITE("SBEServiceIdStampMixin") {
         auto producer = TestProducer{&queue};
         auto consumer = TestConsumer{&queue};
 
-        producer.send<svc::Heartbeat>([](svc::Heartbeat msg) {
+        (void)producer.send<svc::Heartbeat>([](svc::Heartbeat msg) {
             msg.get<"ts">().value(1);
             msg.get<"flags">().value(svc::ServiceFlags{});
         });
@@ -77,12 +77,12 @@ TEST_SUITE("SBEServiceIdStampMixin") {
         producer.setServiceId(ServiceId{7});
         CHECK_EQ(producer.serviceId().value_of(), 7u);
 
-        producer.send<svc::Heartbeat>([](svc::Heartbeat msg) {
+        (void)producer.send<svc::Heartbeat>([](svc::Heartbeat msg) {
             msg.get<"ts">().value(1);
             msg.get<"flags">().value(svc::ServiceFlags{});
         });
         producer.setServiceId(ServiceId{9});
-        producer.send<svc::Heartbeat>([](svc::Heartbeat msg) {
+        (void)producer.send<svc::Heartbeat>([](svc::Heartbeat msg) {
             msg.get<"ts">().value(2);
             msg.get<"flags">().value(svc::ServiceFlags{});
         });
@@ -99,7 +99,7 @@ TEST_SUITE("SBEServiceIdStampMixin") {
         auto consumer = TestConsumer{&queue};
 
         producer.setServiceId(ServiceId{42});
-        producer.send<md::SnapshotRequest>([](md::SnapshotRequest msg) {
+        (void)producer.send<md::SnapshotRequest>([](md::SnapshotRequest msg) {
             msg.get<"depth">().value(10);
         });
 

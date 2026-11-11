@@ -32,7 +32,7 @@ struct TestConsumer : public testing::Consumer, public mixin::SBEReceiveMixin, p
 
 /// Publishes a Heartbeat carrying the given flag state
 auto publishBeat(TestProducer& producer, svc::ServiceFlags flags) -> void {
-    producer.send<svc::Heartbeat>([flags](svc::Heartbeat msg) {
+    (void)producer.send<svc::Heartbeat>([flags](svc::Heartbeat msg) {
         msg.get<"ts">().value(realtimeNanos());
         msg.get<"flags">().value(flags);
     });
@@ -88,14 +88,14 @@ TEST_SUITE("SBEAliveMixin") {
         auto consumer = TestConsumer{&queue};
         consumer.setAliveInterval(std::chrono::milliseconds{10});
 
-        producer.send<svc::SetLogLevel>([](svc::SetLogLevel msg) {
+        (void)producer.send<svc::SetLogLevel>([](svc::SetLogLevel msg) {
             msg.get<"level">().value(svc::LogLevel::Info);
         });
         drain(consumer); // SetLogLevel is svc schema but not in the decode list
         CHECK(consumer.isAlive());
 
         std::this_thread::sleep_for(std::chrono::milliseconds{3});
-        producer.send<trd::CancelAll>([](trd::CancelAll msg) {
+        (void)producer.send<trd::CancelAll>([](trd::CancelAll msg) {
             msg.get<"contextId">().value(1);
             msg.get<"requestId">().value(2);
         });
@@ -136,7 +136,7 @@ TEST_SUITE("SBEAliveMixin") {
         drain(consumer);
         CHECK_FALSE(consumer.isAlive());
 
-        producer.send<trd::CancelAll>([](trd::CancelAll msg) {
+        (void)producer.send<trd::CancelAll>([](trd::CancelAll msg) {
             msg.get<"contextId">().value(1);
             msg.get<"requestId">().value(2);
         });

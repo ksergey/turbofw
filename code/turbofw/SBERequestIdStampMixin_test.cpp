@@ -61,10 +61,10 @@ TEST_SUITE("SBERequestIdStampMixin") {
         auto producer = TestProducer{&queue};
         auto consumer = TestConsumer{&queue};
 
-        producer.send<svc::SetLogLevel>([](svc::SetLogLevel msg) {
+        (void)producer.send<svc::SetLogLevel>([](svc::SetLogLevel msg) {
             msg.get<"level">().value(svc::LogLevel::Info);
         });
-        producer.send<svc::SetLogLevel>([](svc::SetLogLevel msg) {
+        (void)producer.send<svc::SetLogLevel>([](svc::SetLogLevel msg) {
             msg.get<"level">().value(svc::LogLevel::Info);
         });
 
@@ -82,10 +82,10 @@ TEST_SUITE("SBERequestIdStampMixin") {
         auto consumer = TestConsumer{&queue};
 
         for (auto i = 0; i != 128; ++i) {
-            producer.send<svc::SetLogLevel>([](svc::SetLogLevel msg) {
+            (void)producer.send<svc::SetLogLevel>([](svc::SetLogLevel msg) {
                 msg.get<"level">().value(svc::LogLevel::Info);
             });
-            producer.send<md::SnapshotRequest>([](md::SnapshotRequest msg) {
+            (void)producer.send<md::SnapshotRequest>([](md::SnapshotRequest msg) {
                 msg.get<"depth">().value(10);
             });
         }
@@ -103,7 +103,7 @@ TEST_SUITE("SBERequestIdStampMixin") {
         auto producer = TestProducer{&queue};
         auto consumer = TestConsumer{&queue};
 
-        producer.send<svc::Heartbeat>([](svc::Heartbeat msg) {
+        (void)producer.send<svc::Heartbeat>([](svc::Heartbeat msg) {
             msg.get<"ts">().value(1);
             msg.get<"flags">().value(svc::ServiceFlags{}.start(true));
         });

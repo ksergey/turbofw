@@ -68,7 +68,7 @@ TEST_SUITE("SBEAppIdStampMixin") {
         auto producer = TestProducer{&queue};
         auto consumer = TestConsumer{&queue};
 
-        producer.send<svc::SetLogLevel>([](svc::SetLogLevel msg) {
+        (void)producer.send<svc::SetLogLevel>([](svc::SetLogLevel msg) {
             msg.get<"level">().value(svc::LogLevel::Info);
         });
 
@@ -85,14 +85,14 @@ TEST_SUITE("SBEAppIdStampMixin") {
         producer.setAppId(AppId{42});
         CHECK_EQ(producer.appId().value_of(), 42u);
 
-        producer.send<svc::SetLogLevel>([](svc::SetLogLevel msg) {
+        (void)producer.send<svc::SetLogLevel>([](svc::SetLogLevel msg) {
             msg.get<"level">().value(svc::LogLevel::Info);
         });
-        producer.send<md::SnapshotRequest>([](md::SnapshotRequest msg) {
+        (void)producer.send<md::SnapshotRequest>([](md::SnapshotRequest msg) {
             msg.get<"depth">().value(10);
         });
         producer.setAppId(AppId{43});
-        producer.send<md::SnapshotRequest>([](md::SnapshotRequest msg) {
+        (void)producer.send<md::SnapshotRequest>([](md::SnapshotRequest msg) {
             msg.get<"depth">().value(10);
         });
 
@@ -109,7 +109,7 @@ TEST_SUITE("SBEAppIdStampMixin") {
         auto consumer = TestConsumer{&queue};
 
         producer.setAppId(AppId{42});
-        producer.send<svc::Heartbeat>([](svc::Heartbeat msg) {
+        (void)producer.send<svc::Heartbeat>([](svc::Heartbeat msg) {
             msg.get<"ts">().value(1);
             msg.get<"flags">().value(svc::ServiceFlags{}.start(true));
         });
