@@ -51,7 +51,12 @@ struct StrongTypeImpl<T, Tag, none> {
 
 } // namespace detail
 
-/// Strong typedef based on gh:rollbear/strong_type
+/// Strong typedef based on gh:rollbear/strong_type. Without NoValue (the default `none`) it is a plain
+/// regular + formattable type; with a NoValue sentinel it also carries `hasValue()` / `reset()`.
+///
+/// \code{.cpp}
+/// using RequestId = StrongType<std::uint64_t, struct RequestId_Tag, 0xFFFF'FFFF'FFFF'FFFFULL>;
+/// \endcode
 template <typename T, typename Tag, auto NoValue = detail::none>
 using StrongType = typename detail::StrongTypeImpl<T, Tag, NoValue>::type;
 
