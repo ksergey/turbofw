@@ -12,7 +12,7 @@
 #include <turbofw/ProducerConsumerTraits.h>
 #include <turbofw/Types.h>
 #include <turbofw/mixin/SBEReceiveMixin.h>
-#include <turbofw/svc/Heartbeat.h>
+#include <turbofw/schema/service/Heartbeat.h>
 #include <turboq/MulticastMessageQueue.h>
 
 // clang-format off
@@ -54,7 +54,7 @@ int main(int argc, char* argv[]) {
         }
 
         while (true) {
-            consumer->receive<svc::Heartbeat>([](auto msg) {
+            consumer->receive<service::Heartbeat>([](auto msg) {
                 auto const serviceId = turbofw::ServiceId{msg.template get<"serviceId">().value()};
                 auto const ts = msg.template get<"ts">().value();
 

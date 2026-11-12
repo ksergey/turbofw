@@ -13,7 +13,7 @@
 #include <turbofw/ProducerConsumerTraits.h>
 #include <turbofw/mixin/SBESendMixin.h>
 #include <turbofw/mixin/SBEServiceIdStampMixin.h>
-#include <turbofw/svc/Heartbeat.h>
+#include <turbofw/schema/service/Heartbeat.h>
 #include <turboq/MulticastMessageQueue.h>
 
 // clang-format off
@@ -62,9 +62,9 @@ int main(int argc, char* argv[]) {
         }
 
         while (true) {
-            auto const sent = producer->send<svc::Heartbeat>([](auto body) {
+            auto const sent = producer->send<service::Heartbeat>([](auto body) {
                 body.template get<"ts">().value(turbofw::realtimeNanos());
-                body.template get<"flags">().value(svc::ServiceFlags{});
+                body.template get<"flags">().value(service::ServiceFlags{});
             });
             if (sent) {
                 std::print(stdout, "heartbeat sent\n");

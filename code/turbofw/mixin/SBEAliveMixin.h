@@ -8,7 +8,7 @@
 #include <span>
 
 #include <turbofw/Clock.h>
-#include <turbofw/svc/schema.h>
+#include <turbofw/schema/service/schema.h>
 
 namespace turbofw::mixin {
 
@@ -43,8 +43,8 @@ public:
     auto processMessage(Header header, std::span<std::byte const> buffer) noexcept -> void {
         nextMessageDeadline_ = monotonicNanos() + interval_.count();
 
-        if (header.template get<"schemaId">().value() != svc::Heartbeat::sbeSchemaId() ||
-            header.template get<"templateId">().value() != svc::Heartbeat::sbeTemplateId()) {
+        if (header.template get<"schemaId">().value() != service::Heartbeat::sbeSchemaId() ||
+            header.template get<"templateId">().value() != service::Heartbeat::sbeTemplateId()) {
             return;
         }
         auto const blockLength = header.template get<"blockLength">().value();
@@ -52,7 +52,7 @@ public:
             return; // a truncated body: leave the latch cleared, the decode step reports it (fatally) instead
         }
         auto const mutableBuffer = std::span<std::byte>{const_cast<std::byte*>(buffer.data()), buffer.size()};
-        auto msg = svc::Heartbeat{
+        auto msg = service::Heartbeat{
             mutableBuffer, Header::sbeEncodedLength(), blockLength, header.template get<"version">().value()};
         if (msg.get<"flags">().value().stop()) [[unlikely]] {
             nextMessageDeadline_ = 0;

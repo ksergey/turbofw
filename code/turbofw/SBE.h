@@ -46,7 +46,7 @@ concept UniformHeader = mp::IsList<L>::value && (mp::Size<mp::Unique<mp::Transfo
 } // namespace detail
 
 /// The generated MessageHeader shared by every message of the list L (all types of one schema carry one; md and
-/// svc mix legally because both include the very same common_types header). A list element without a `Header`
+/// service mix legally because both include the very same common_types header). A list element without a `Header`
 /// alias is a hard compile error, not a concept failure -- SBE lists are written by hand.
 template <typename L>
     requires detail::UniformHeader<L>
@@ -68,8 +68,8 @@ struct FieldNamed {
 
 } // namespace detail
 
-/// The field ref of the generated SBE message M named N: `SBEFieldOf<svc::Heartbeat, "serviceId">` is
-/// `svc::Heartbeat::ServiceIdRef`. The search runs over `M::Fields` in schema order; the name argument is a
+/// The field ref of the generated SBE message M named N: `SBEFieldOf<service::Heartbeat, "serviceId">` is
+/// `service::Heartbeat::ServiceIdRef`. The search runs over `M::Fields` in schema order; the name argument is a
 /// `turbofw::CtString` string literal. An unknown name is a hard compile error -- use `SBEHasField` for the
 /// soft check.
 template <typename M, CtString N>

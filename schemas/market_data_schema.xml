@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <sbe:messageSchema xmlns:sbe="http://fixprotocol.io/2016/sbe"
                    xmlns:xi="http://www.w3.org/2001/XInclude"
-                   package="md" id="1" version="0" semanticVersion="0.1"
+                   package="market_data" id="1" version="0" semanticVersion="0.1"
                    byteOrder="littleEndian" description="Market data">
 
   <!-- messageHeader, groupSizeEncoding, varStringEncoding, InstrumentId, Timestamp,
@@ -149,7 +149,7 @@
   </sbe:message>
 
   <!-- ================= Requests / responses ================= -->
-  <!-- Template ids 31 and 32 (instrument definitions) were moved to the meta schema
+  <!-- Template ids 31 and 32 (instrument definitions) were moved to the metadata schema
        and must not be reused. -->
 
   <!-- Response: Snapshot chunk(s) followed by RequestComplete. -->

@@ -12,9 +12,9 @@
 #include "mixin/SBEAppIdStampMixin.h"
 #include "mixin/SBESendMixin.h"
 #include "testing/TestQueue.h"
-#include <turbofw/md/schema.h>
 #include <turbofw/mp/List.h>
-#include <turbofw/svc/schema.h>
+#include <turbofw/schema/market_data/schema.h>
+#include <turbofw/schema/service/schema.h>
 
 namespace turbofw::testing {
 namespace {
@@ -31,15 +31,17 @@ struct TestConsumer : public testing::Consumer, public mixin::ReceiveMixin {
 
 /// Decodes the appId of a SetLogLevel, a SnapshotRequest or a RequestComplete carried by a queue buffer
 auto decodedAppId(std::span<std::byte const> buffer) -> std::uint32_t {
-    auto const header = svc::MessageHeader{const_cast<std::byte*>(buffer.data())};
+    auto const header = service::MessageHeader{const_cast<std::byte*>(buffer.data())};
     auto const body = std::span<std::byte>{const_cast<std::byte*>(buffer.data()), buffer.size()};
     auto const blockLength = header.get<"blockLength">().value();
     auto const version = header.get<"version">().value();
     switch (header.get<"templateId">().value()) {
-    case svc::SetLogLevel::sbeTemplateId():
-        return svc::SetLogLevel{body, header.sbeEncodedLength(), blockLength, version}.get<"appId">().value();
-    case md::SnapshotRequest::sbeTemplateId():
-        return md::SnapshotRequest{body, header.sbeEncodedLength(), blockLength, version}.get<"appId">().value();
+    case service::SetLogLevel::sbeTemplateId():
+        return service::SetLogLevel{body, header.sbeEncodedLength(), blockLength, version}.get<"appId">().value();
+    case market_data::SnapshotRequest::sbeTemplateId():
+        return market_data::SnapshotRequest{body, header.sbeEncodedLength(), blockLength, version}
+            .get<"appId">()
+            .value();
     default: return 0;
     }
 }
@@ -68,8 +70,8 @@ TEST_SUITE("SBEAppIdStampMixin") {
         auto producer = TestProducer{&queue};
         auto consumer = TestConsumer{&queue};
 
-        (void)producer.send<svc::SetLogLevel>([](svc::SetLogLevel msg) {
-            msg.get<"level">().value(svc::LogLevel::Info);
+        (void)producer.send<service::SetLogLevel>([](service::SetLogLevel msg) {
+            msg.get<"level">().value(service::LogLevel::Info);
         });
 
         auto const appIds = drainedAppIds(consumer);
@@ -85,20 +87,20 @@ TEST_SUITE("SBEAppIdStampMixin") {
         producer.setAppId(AppId{42});
         CHECK_EQ(producer.appId().value_of(), 42u);
 
-        (void)producer.send<svc::SetLogLevel>([](svc::SetLogLevel msg) {
-            msg.get<"level">().value(svc::LogLevel::Info);
+        (void)producer.send<service::SetLogLevel>([](service::SetLogLevel msg) {
+            msg.get<"level">().value(service::LogLevel::Info);
         });
-        (void)producer.send<md::SnapshotRequest>([](md::SnapshotRequest msg) {
+        (void)producer.send<market_data::SnapshotRequest>([](market_data::SnapshotRequest msg) {
             msg.get<"depth">().value(10);
         });
         producer.setAppId(AppId{43});
-        (void)producer.send<md::SnapshotRequest>([](md::SnapshotRequest msg) {
+        (void)producer.send<market_data::SnapshotRequest>([](market_data::SnapshotRequest msg) {
             msg.get<"depth">().value(10);
         });
 
         auto const appIds = drainedAppIds(consumer);
         REQUIRE_EQ(appIds.size(), 3);
-        CHECK_EQ(appIds[0], 42u); // svc schema, required appId
+        CHECK_EQ(appIds[0], 42u); // service schema, required appId
         CHECK_EQ(appIds[1], 42u); // md schema, required appId
         CHECK_EQ(appIds[2], 43u); // the change applies to subsequent sends
     }
@@ -109,16 +111,16 @@ TEST_SUITE("SBEAppIdStampMixin") {
         auto consumer = TestConsumer{&queue};
 
         producer.setAppId(AppId{42});
-        (void)producer.send<svc::Heartbeat>([](svc::Heartbeat msg) {
+        (void)producer.send<service::Heartbeat>([](service::Heartbeat msg) {
             msg.get<"ts">().value(1);
-            msg.get<"flags">().value(svc::ServiceFlags{}.start(true));
+            msg.get<"flags">().value(service::ServiceFlags{}.start(true));
         });
 
-        auto result = std::vector<svc::ServiceFlags>{};
+        auto result = std::vector<service::ServiceFlags>{};
         consumer.receive([&](std::span<std::byte const> buffer) {
-            auto const header = svc::MessageHeader{const_cast<std::byte*>(buffer.data())};
-            REQUIRE_EQ(header.get<"templateId">().value(), svc::Heartbeat::sbeTemplateId());
-            auto msg = svc::Heartbeat{std::span<std::byte>{const_cast<std::byte*>(buffer.data()), buffer.size()},
+            auto const header = service::MessageHeader{const_cast<std::byte*>(buffer.data())};
+            REQUIRE_EQ(header.get<"templateId">().value(), service::Heartbeat::sbeTemplateId());
+            auto msg = service::Heartbeat{std::span<std::byte>{const_cast<std::byte*>(buffer.data()), buffer.size()},
                 header.sbeEncodedLength(), header.get<"blockLength">().value(), header.get<"version">().value()};
             result.push_back(msg.get<"flags">().value());
         });

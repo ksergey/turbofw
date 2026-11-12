@@ -12,9 +12,9 @@
 #include "mixin/SBESendMixin.h"
 #include "mixin/SBEServiceIdStampMixin.h"
 #include "testing/TestQueue.h"
-#include <turbofw/md/schema.h>
 #include <turbofw/mp/List.h>
-#include <turbofw/svc/schema.h>
+#include <turbofw/schema/market_data/schema.h>
+#include <turbofw/schema/service/schema.h>
 
 namespace turbofw::testing {
 namespace {
@@ -29,12 +29,12 @@ struct TestConsumer : public testing::Consumer, public mixin::ReceiveMixin {
     using testing::Consumer::Consumer;
 };
 
-/// Decodes the raw serviceId of a svc::Heartbeat carried by a queue buffer (0xFFFF is the null sentinel)
+/// Decodes the raw serviceId of a service::Heartbeat carried by a queue buffer (0xFFFF is the null sentinel)
 auto decodedServiceId(std::span<std::byte const> buffer) -> std::uint16_t {
-    auto const header = svc::MessageHeader{const_cast<std::byte*>(buffer.data())};
-    REQUIRE_EQ(header.get<"templateId">().value(), svc::Heartbeat::sbeTemplateId());
+    auto const header = service::MessageHeader{const_cast<std::byte*>(buffer.data())};
+    REQUIRE_EQ(header.get<"templateId">().value(), service::Heartbeat::sbeTemplateId());
     auto const body = std::span<std::byte>{const_cast<std::byte*>(buffer.data()), buffer.size()};
-    auto msg = svc::Heartbeat{
+    auto msg = service::Heartbeat{
         body, header.sbeEncodedLength(), header.get<"blockLength">().value(), header.get<"version">().value()};
     return msg.get<"serviceId">().value();
 }
@@ -59,9 +59,9 @@ TEST_SUITE("SBEServiceIdStampMixin") {
         auto producer = TestProducer{&queue};
         auto consumer = TestConsumer{&queue};
 
-        (void)producer.send<svc::Heartbeat>([](svc::Heartbeat msg) {
+        (void)producer.send<service::Heartbeat>([](service::Heartbeat msg) {
             msg.get<"ts">().value(1);
-            msg.get<"flags">().value(svc::ServiceFlags{});
+            msg.get<"flags">().value(service::ServiceFlags{});
         });
 
         auto const serviceIds = drainedServiceIds(consumer);
@@ -77,14 +77,14 @@ TEST_SUITE("SBEServiceIdStampMixin") {
         producer.setServiceId(ServiceId{7});
         CHECK_EQ(producer.serviceId().value_of(), 7u);
 
-        (void)producer.send<svc::Heartbeat>([](svc::Heartbeat msg) {
+        (void)producer.send<service::Heartbeat>([](service::Heartbeat msg) {
             msg.get<"ts">().value(1);
-            msg.get<"flags">().value(svc::ServiceFlags{});
+            msg.get<"flags">().value(service::ServiceFlags{});
         });
         producer.setServiceId(ServiceId{9});
-        (void)producer.send<svc::Heartbeat>([](svc::Heartbeat msg) {
+        (void)producer.send<service::Heartbeat>([](service::Heartbeat msg) {
             msg.get<"ts">().value(2);
-            msg.get<"flags">().value(svc::ServiceFlags{});
+            msg.get<"flags">().value(service::ServiceFlags{});
         });
 
         auto const serviceIds = drainedServiceIds(consumer);
@@ -99,15 +99,15 @@ TEST_SUITE("SBEServiceIdStampMixin") {
         auto consumer = TestConsumer{&queue};
 
         producer.setServiceId(ServiceId{42});
-        (void)producer.send<md::SnapshotRequest>([](md::SnapshotRequest msg) {
+        (void)producer.send<market_data::SnapshotRequest>([](market_data::SnapshotRequest msg) {
             msg.get<"depth">().value(10);
         });
 
         auto depths = std::vector<int>{};
         consumer.receive([&](std::span<std::byte const> buffer) {
-            auto const header = svc::MessageHeader{const_cast<std::byte*>(buffer.data())};
+            auto const header = service::MessageHeader{const_cast<std::byte*>(buffer.data())};
             auto const body = std::span<std::byte>{const_cast<std::byte*>(buffer.data()), buffer.size()};
-            auto msg = md::SnapshotRequest{
+            auto msg = market_data::SnapshotRequest{
                 body, header.sbeEncodedLength(), header.get<"blockLength">().value(), header.get<"version">().value()};
             depths.push_back(msg.get<"depth">().value());
         });

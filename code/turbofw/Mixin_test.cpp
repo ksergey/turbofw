@@ -10,9 +10,9 @@
 
 #include <doctest/doctest.h>
 
-#include <turbofw/md/schema.h>
-#include <turbofw/svc/schema.h>
-#include <turbofw/trd/schema.h>
+#include <turbofw/schema/market_data/schema.h>
+#include <turbofw/schema/service/schema.h>
+#include <turbofw/schema/trading/schema.h>
 
 #include "Error.h"
 #include "mixin/ReceiveMixin.h"
@@ -135,18 +135,18 @@ TEST_SUITE("SBESendMixin") {
         CHECK_EQ(consumer.receive(kNoOpReceive), 0);
 
         auto constexpr kTimestamp = std::int64_t{222};
-        auto const sent = producer.send<svc::Heartbeat>([&](svc::Heartbeat msg) {
+        auto const sent = producer.send<service::Heartbeat>([&](service::Heartbeat msg) {
             msg.get<"ts">().value(kTimestamp);
             msg.get<"serviceId">().value(1);
-            msg.get<"flags">().value(svc::ServiceFlags{}.start(true));
+            msg.get<"flags">().value(service::ServiceFlags{}.start(true));
         });
         REQUIRE(sent);
 
         auto const count = consumer.receive([&](std::span<std::byte const> buffer) {
-            auto const header = svc::MessageHeader{const_cast<std::byte*>(buffer.data())};
-            REQUIRE_EQ(header.get<"schemaId">().value(), svc::Heartbeat::sbeSchemaId());
-            REQUIRE_EQ(header.get<"templateId">().value(), svc::Heartbeat::sbeTemplateId());
-            auto msg = svc::Heartbeat{std::span<std::byte>{const_cast<std::byte*>(buffer.data()), buffer.size()},
+            auto const header = service::MessageHeader{const_cast<std::byte*>(buffer.data())};
+            REQUIRE_EQ(header.get<"schemaId">().value(), service::Heartbeat::sbeSchemaId());
+            REQUIRE_EQ(header.get<"templateId">().value(), service::Heartbeat::sbeTemplateId());
+            auto msg = service::Heartbeat{std::span<std::byte>{const_cast<std::byte*>(buffer.data()), buffer.size()},
                 header.sbeEncodedLength(), header.get<"blockLength">().value(), header.get<"version">().value()};
             REQUIRE_EQ(msg.get<"serviceId">().value(), 1u);
             REQUIRE_EQ(msg.get<"ts">().value(), kTimestamp);
@@ -164,10 +164,10 @@ TEST_SUITE("SBESendMixin") {
 
         CHECK_EQ(consumer.receive(kNoOpReceive), 0);
 
-        auto const sent = producer.send<md::Snapshot>({2u, 1u, 1u}, [](md::Snapshot msg) {
+        auto const sent = producer.send<market_data::Snapshot>({2u, 1u, 1u}, [](market_data::Snapshot msg) {
             auto header = msg.get<"header">();
             header.get<"instrumentId">().value(42);
-            header.get<"flags">().value(md::MdFlags{}.snapshot(true).mandatory(true));
+            header.get<"flags">().value(market_data::MdFlags{}.snapshot(true).mandatory(true));
             msg.get<"appId">().value(17);
             msg.get<"requestId">().value(3);
 
@@ -189,10 +189,10 @@ TEST_SUITE("SBESendMixin") {
         REQUIRE(sent);
 
         auto const count = consumer.receive([&](std::span<std::byte const> buffer) {
-            auto const header = md::MessageHeader{const_cast<std::byte*>(buffer.data())};
-            REQUIRE_EQ(header.get<"schemaId">().value(), md::Snapshot::sbeSchemaId());
-            REQUIRE_EQ(header.get<"templateId">().value(), md::Snapshot::sbeTemplateId());
-            auto msg = md::Snapshot{std::span<std::byte>{const_cast<std::byte*>(buffer.data()), buffer.size()},
+            auto const header = market_data::MessageHeader{const_cast<std::byte*>(buffer.data())};
+            REQUIRE_EQ(header.get<"schemaId">().value(), market_data::Snapshot::sbeSchemaId());
+            REQUIRE_EQ(header.get<"templateId">().value(), market_data::Snapshot::sbeTemplateId());
+            auto msg = market_data::Snapshot{std::span<std::byte>{const_cast<std::byte*>(buffer.data()), buffer.size()},
                 header.sbeEncodedLength(), header.get<"blockLength">().value(), header.get<"version">().value()};
             REQUIRE_EQ(msg.get<"header">().get<"instrumentId">().value(), 42u);
             auto decodedFlags = msg.get<"header">().get<"flags">().value();
@@ -220,9 +220,9 @@ TEST_SUITE("SBESendMixin") {
 
         auto constexpr kClientCode = "ALPHA";
         auto constexpr kAccount = "SPOT-ACC";
-        auto const sent = producer.send<trd::CreateContext>(
+        auto const sent = producer.send<trading::CreateContext>(
             {std::char_traits<char>::length(kClientCode), std::char_traits<char>::length(kAccount)},
-            [](trd::CreateContext msg) {
+            [](trading::CreateContext msg) {
                 msg.get<"appId">().value(17);
                 msg.get<"requestId">().value(3);
                 msg.get<"instrumentId">().value(42);
@@ -232,11 +232,12 @@ TEST_SUITE("SBESendMixin") {
         REQUIRE(sent);
 
         auto const count = consumer.receive([&](std::span<std::byte const> buffer) {
-            auto const header = trd::MessageHeader{const_cast<std::byte*>(buffer.data())};
-            REQUIRE_EQ(header.get<"schemaId">().value(), trd::CreateContext::sbeSchemaId());
-            REQUIRE_EQ(header.get<"templateId">().value(), trd::CreateContext::sbeTemplateId());
-            auto msg = trd::CreateContext{std::span<std::byte>{const_cast<std::byte*>(buffer.data()), buffer.size()},
-                header.sbeEncodedLength(), header.get<"blockLength">().value(), header.get<"version">().value()};
+            auto const header = trading::MessageHeader{const_cast<std::byte*>(buffer.data())};
+            REQUIRE_EQ(header.get<"schemaId">().value(), trading::CreateContext::sbeSchemaId());
+            REQUIRE_EQ(header.get<"templateId">().value(), trading::CreateContext::sbeTemplateId());
+            auto msg =
+                trading::CreateContext{std::span<std::byte>{const_cast<std::byte*>(buffer.data()), buffer.size()},
+                    header.sbeEncodedLength(), header.get<"blockLength">().value(), header.get<"version">().value()};
             REQUIRE_EQ(msg.get<"appId">().value(), 17u);
             REQUIRE_EQ(msg.get<"requestId">().value(), 3u);
             REQUIRE_EQ(msg.get<"instrumentId">().value(), 42u);
@@ -254,26 +255,26 @@ TEST_SUITE("SBESendMixin") {
 
         // the fixed-message overload: the hook stamps clientId=7 (SetLogLevel), the user callback leaves it
         // alone -- a zeroed buffer otherwise, so 7 proves the hook encoded into the buffer
-        auto const fixed = producer.send<svc::SetLogLevel>([](svc::SetLogLevel msg) {
-            msg.get<"level">().value(svc::LogLevel::Trace);
+        auto const fixed = producer.send<service::SetLogLevel>([](service::SetLogLevel msg) {
+            msg.get<"level">().value(service::LogLevel::Trace);
         });
         REQUIRE(fixed);
 
         auto const count = consumer.receive([&](std::span<std::byte const> buffer) {
-            auto const header = svc::MessageHeader{const_cast<std::byte*>(buffer.data())};
-            REQUIRE_EQ(header.get<"templateId">().value(), svc::SetLogLevel::sbeTemplateId());
-            auto msg = svc::SetLogLevel{std::span<std::byte>{const_cast<std::byte*>(buffer.data()), buffer.size()},
+            auto const header = service::MessageHeader{const_cast<std::byte*>(buffer.data())};
+            REQUIRE_EQ(header.get<"templateId">().value(), service::SetLogLevel::sbeTemplateId());
+            auto msg = service::SetLogLevel{std::span<std::byte>{const_cast<std::byte*>(buffer.data()), buffer.size()},
                 header.sbeEncodedLength(), header.get<"blockLength">().value(), header.get<"version">().value()};
             CHECK_EQ(msg.get<"appId">().value(), 7u); // stamped by the hook, never touched by the callback
-            CHECK(msg.get<"level">().value() == svc::LogLevel::Trace);
+            CHECK(msg.get<"level">().value() == service::LogLevel::Trace);
         });
         CHECK_EQ(count, 1);
 
         // the vars overload (repeating groups): the same generic hook still runs
-        auto const groups = producer.send<md::Snapshot>({2u, 1u, 1u}, [](md::Snapshot msg) {
+        auto const groups = producer.send<market_data::Snapshot>({2u, 1u, 1u}, [](market_data::Snapshot msg) {
             auto header = msg.get<"header">();
             header.get<"instrumentId">().value(42);
-            header.get<"flags">().value(md::MdFlags{}.snapshot(true));
+            header.get<"flags">().value(market_data::MdFlags{}.snapshot(true));
             auto bids = msg.get<"bids">();
             bids.reset(2);
             for (std::int64_t i = 0; bids.hasNext(); ++i) {
@@ -292,9 +293,9 @@ TEST_SUITE("SBESendMixin") {
         REQUIRE(groups);
 
         auto const snapshotCount = consumer.receive([&](std::span<std::byte const> buffer) {
-            auto const header = md::MessageHeader{const_cast<std::byte*>(buffer.data())};
-            REQUIRE_EQ(header.get<"templateId">().value(), md::Snapshot::sbeTemplateId());
-            auto msg = md::Snapshot{std::span<std::byte>{const_cast<std::byte*>(buffer.data()), buffer.size()},
+            auto const header = market_data::MessageHeader{const_cast<std::byte*>(buffer.data())};
+            REQUIRE_EQ(header.get<"templateId">().value(), market_data::Snapshot::sbeTemplateId());
+            auto msg = market_data::Snapshot{std::span<std::byte>{const_cast<std::byte*>(buffer.data()), buffer.size()},
                 header.sbeEncodedLength(), header.get<"blockLength">().value(), header.get<"version">().value()};
             CHECK_EQ(msg.get<"appId">().value(), 7u); // stamped by the hook through the vars overload
             CHECK_EQ(msg.get<"header">().get<"instrumentId">().value(), 42u);

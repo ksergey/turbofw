@@ -7,7 +7,7 @@
 
 #include <doctest/doctest.h>
 
-#include <turbofw/meta/schema.h>
+#include <turbofw/schema/metadata/schema.h>
 
 namespace turbofw::testing {
 
@@ -15,87 +15,87 @@ TEST_SUITE("MetaSchema") {
     TEST_CASE("RegisterService / RegisterServiceResult round trip") {
         std::array<std::byte, 256> buffer{};
 
-        auto msg = meta::RegisterService::wrapAndApplyHeader(buffer);
+        auto msg = metadata::RegisterService::wrapAndApplyHeader(buffer);
         msg.get<"appId">().value(17);
         msg.get<"requestId">().value(3);
         msg.get<"reportedTs">().value(1'775'000'000'000'000'000);
-        msg.get<"state">().value(meta::ServiceState::Active);
+        msg.get<"state">().value(metadata::ServiceState::Active);
         msg.get<"name">().value("md-binance-1");
         msg.get<"dataQueue">().value("md-binance-1/data");
         msg.get<"requestQueue">().value("md-binance-1/req");
 
-        auto header = meta::MessageHeader{buffer.data()};
-        REQUIRE_EQ(header.get<"schemaId">().value(), meta::RegisterService::sbeSchemaId());
-        REQUIRE_EQ(header.get<"templateId">().value(), meta::RegisterService::sbeTemplateId());
-        auto decoded = meta::RegisterService{
+        auto header = metadata::MessageHeader{buffer.data()};
+        REQUIRE_EQ(header.get<"schemaId">().value(), metadata::RegisterService::sbeSchemaId());
+        REQUIRE_EQ(header.get<"templateId">().value(), metadata::RegisterService::sbeTemplateId());
+        auto decoded = metadata::RegisterService{
             buffer, header.sbeEncodedLength(), header.get<"blockLength">().value(), header.get<"version">().value()};
         REQUIRE_EQ(decoded.get<"appId">().value(), 17);
         REQUIRE_EQ(decoded.get<"requestId">().value(), 3);
         REQUIRE_EQ(decoded.get<"reportedTs">().value(), 1'775'000'000'000'000'000);
-        REQUIRE(decoded.get<"state">().value() == meta::ServiceState::Active);
+        REQUIRE(decoded.get<"state">().value() == metadata::ServiceState::Active);
         REQUIRE_EQ(decoded.get<"name">().value(), std::string_view{"md-binance-1"});
         REQUIRE_EQ(decoded.get<"dataQueue">().value(), std::string_view{"md-binance-1/data"});
         REQUIRE_EQ(decoded.get<"requestQueue">().value(), std::string_view{"md-binance-1/req"});
 
-        auto result = meta::RegisterServiceResult::wrapAndApplyHeader(buffer);
+        auto result = metadata::RegisterServiceResult::wrapAndApplyHeader(buffer);
         result.get<"appId">().value(17);
         result.get<"requestId">().value(3);
-        result.get<"status">().value(meta::RegisterStatus::Created);
+        result.get<"status">().value(metadata::RegisterStatus::Created);
         result.get<"serviceId">().value(3);
         result.get<"version">().value(1);
 
-        auto resultHeader = meta::MessageHeader{buffer.data()};
-        auto decodedResult = meta::RegisterServiceResult{buffer, resultHeader.sbeEncodedLength(),
+        auto resultHeader = metadata::MessageHeader{buffer.data()};
+        auto decodedResult = metadata::RegisterServiceResult{buffer, resultHeader.sbeEncodedLength(),
             resultHeader.get<"blockLength">().value(), resultHeader.get<"version">().value()};
-        REQUIRE(decodedResult.get<"status">().value() == meta::RegisterStatus::Created);
+        REQUIRE(decodedResult.get<"status">().value() == metadata::RegisterStatus::Created);
         REQUIRE(decodedResult.get<"serviceId">().present());
         REQUIRE_EQ(decodedResult.get<"serviceId">().value(), 3);
         REQUIRE_EQ(decodedResult.get<"version">().value(), 1);
 
         std::array<std::byte, 128> failureBuffer{};
-        auto rejected = meta::RegisterServiceResult::wrapAndApplyHeader(failureBuffer);
+        auto rejected = metadata::RegisterServiceResult::wrapAndApplyHeader(failureBuffer);
         rejected.get<"appId">().value(17);
         rejected.get<"requestId">().value(4);
-        rejected.get<"status">().value(meta::RegisterStatus::Rejected);
+        rejected.get<"status">().value(metadata::RegisterStatus::Rejected);
         rejected.get<"serviceId">().reset(); // null if Rejected
         rejected.get<"version">().value(0);
-        auto failureHeader = meta::MessageHeader{failureBuffer.data()};
-        auto decodedRejected = meta::RegisterServiceResult{failureBuffer, failureHeader.sbeEncodedLength(),
+        auto failureHeader = metadata::MessageHeader{failureBuffer.data()};
+        auto decodedRejected = metadata::RegisterServiceResult{failureBuffer, failureHeader.sbeEncodedLength(),
             failureHeader.get<"blockLength">().value(), failureHeader.get<"version">().value()};
-        REQUIRE(decodedRejected.get<"status">().value() == meta::RegisterStatus::Rejected);
+        REQUIRE(decodedRejected.get<"status">().value() == metadata::RegisterStatus::Rejected);
         REQUIRE_FALSE(decodedRejected.get<"serviceId">().present());
     }
 
     TEST_CASE("RegisterInstrument / RegisterInstrumentResult round trip") {
         std::array<std::byte, 256> buffer{};
 
-        auto msg = meta::RegisterInstrument::wrapAndApplyHeader(buffer);
+        auto msg = metadata::RegisterInstrument::wrapAndApplyHeader(buffer);
         msg.get<"appId">().value(17);
         msg.get<"requestId">().value(3);
         msg.get<"reportedTs">().value(1'775'000'000'000'000'000);
         auto attrs = msg.get<"attrs">();
         attrs.get<"venueId">().value(900);
         attrs.get<"serviceId">().value(3);
-        attrs.get<"instrumentType">().value(meta::InstrumentType::Future);
-        attrs.get<"state">().value(meta::InstrumentState::Active);
+        attrs.get<"instrumentType">().value(metadata::InstrumentType::Future);
+        attrs.get<"state">().value(metadata::InstrumentState::Active);
         attrs.get<"tickSize">().get<"mantissa">().value(1'000);
         attrs.get<"lotSize">().value(1);
         attrs.get<"multiplier">().value(100);
         attrs.get<"expiry">().reset(); // perpetual
         attrs.get<"currency">().value(840u);
-        attrs.get<"capabilities">().value(meta::Capabilities{}.mbp(true).trades(true));
+        attrs.get<"capabilities">().value(metadata::Capabilities{}.mbp(true).trades(true));
         msg.get<"exchangeSymbol">().value("BTCUSDT-FUT");
         msg.get<"symbol">().value(""); // empty: name is generated by Metadata
 
-        auto header = meta::MessageHeader{buffer.data()};
-        REQUIRE_EQ(header.get<"schemaId">().value(), meta::RegisterInstrument::sbeSchemaId());
-        auto decoded = meta::RegisterInstrument{
+        auto header = metadata::MessageHeader{buffer.data()};
+        REQUIRE_EQ(header.get<"schemaId">().value(), metadata::RegisterInstrument::sbeSchemaId());
+        auto decoded = metadata::RegisterInstrument{
             buffer, header.sbeEncodedLength(), header.get<"blockLength">().value(), header.get<"version">().value()};
         auto decodedAttrs = decoded.get<"attrs">();
         REQUIRE_EQ(decodedAttrs.get<"venueId">().value(), 900);
         REQUIRE_EQ(decodedAttrs.get<"serviceId">().value(), 3);
-        REQUIRE(decodedAttrs.get<"instrumentType">().value() == meta::InstrumentType::Future);
-        REQUIRE(decodedAttrs.get<"state">().value() == meta::InstrumentState::Active);
+        REQUIRE(decodedAttrs.get<"instrumentType">().value() == metadata::InstrumentType::Future);
+        REQUIRE(decodedAttrs.get<"state">().value() == metadata::InstrumentState::Active);
         REQUIRE_EQ(decodedAttrs.get<"tickSize">().get<"mantissa">().value(), 1'000);
         REQUIRE_EQ(decodedAttrs.get<"lotSize">().value(), 1);
         REQUIRE_EQ(decodedAttrs.get<"multiplier">().value(), 100);
@@ -110,24 +110,24 @@ TEST_SUITE("MetaSchema") {
         REQUIRE_EQ(decoded.get<"exchangeSymbol">().value(), std::string_view{"BTCUSDT-FUT"});
         REQUIRE_EQ(decoded.get<"symbol">().value(), std::string_view{});
 
-        auto result = meta::RegisterInstrumentResult::wrapAndApplyHeader(buffer);
+        auto result = metadata::RegisterInstrumentResult::wrapAndApplyHeader(buffer);
         result.get<"appId">().value(17);
         result.get<"requestId">().value(3);
-        result.get<"status">().value(meta::RegisterStatus::Created);
+        result.get<"status">().value(metadata::RegisterStatus::Created);
         result.get<"instrumentId">().value(42);
         result.get<"version">().value(1);
 
-        auto resultHeader = meta::MessageHeader{buffer.data()};
-        auto decodedResult = meta::RegisterInstrumentResult{buffer, resultHeader.sbeEncodedLength(),
+        auto resultHeader = metadata::MessageHeader{buffer.data()};
+        auto decodedResult = metadata::RegisterInstrumentResult{buffer, resultHeader.sbeEncodedLength(),
             resultHeader.get<"blockLength">().value(), resultHeader.get<"version">().value()};
-        REQUIRE(decodedResult.get<"status">().value() == meta::RegisterStatus::Created);
+        REQUIRE(decodedResult.get<"status">().value() == metadata::RegisterStatus::Created);
         REQUIRE_EQ(decodedResult.get<"instrumentId">().value(), 42);
     }
 
     TEST_CASE("InstrumentDefinition spontaneous update") {
         std::array<std::byte, 256> buffer{};
 
-        auto msg = meta::InstrumentDefinition::wrapAndApplyHeader(buffer);
+        auto msg = metadata::InstrumentDefinition::wrapAndApplyHeader(buffer);
         msg.get<"appId">().reset(); // spontaneous update on the multicast queue
         msg.get<"requestId">().value(0);
         msg.get<"instrumentId">().value(42);
@@ -136,27 +136,27 @@ TEST_SUITE("MetaSchema") {
         auto attrs = msg.get<"attrs">();
         attrs.get<"venueId">().value(900);
         attrs.get<"serviceId">().value(3);
-        attrs.get<"instrumentType">().value(meta::InstrumentType::Spot);
-        attrs.get<"state">().value(meta::InstrumentState::Suspended);
+        attrs.get<"instrumentType">().value(metadata::InstrumentType::Spot);
+        attrs.get<"state">().value(metadata::InstrumentState::Suspended);
         attrs.get<"tickSize">().get<"mantissa">().value(1'000);
         attrs.get<"lotSize">().value(1);
         attrs.get<"multiplier">().reset(); // not applicable for spot
         attrs.get<"expiry">().reset();
         attrs.get<"currency">().value(840u);
-        attrs.get<"capabilities">().value(meta::Capabilities{}.mbp(true));
+        attrs.get<"capabilities">().value(metadata::Capabilities{}.mbp(true));
         msg.get<"exchangeSymbol">().value("BTCUSDT");
         msg.get<"symbol">().value("BTC-SPOT");
 
-        auto header = meta::MessageHeader{buffer.data()};
-        REQUIRE_EQ(header.get<"templateId">().value(), meta::InstrumentDefinition::sbeTemplateId());
-        auto decoded = meta::InstrumentDefinition{
+        auto header = metadata::MessageHeader{buffer.data()};
+        REQUIRE_EQ(header.get<"templateId">().value(), metadata::InstrumentDefinition::sbeTemplateId());
+        auto decoded = metadata::InstrumentDefinition{
             buffer, header.sbeEncodedLength(), header.get<"blockLength">().value(), header.get<"version">().value()};
         REQUIRE_FALSE(decoded.get<"appId">().present());
         REQUIRE_EQ(decoded.get<"requestId">().value(), 0);
         REQUIRE_EQ(decoded.get<"instrumentId">().value(), 42);
         REQUIRE_EQ(decoded.get<"version">().value(), 2);
         auto decodedAttrs = decoded.get<"attrs">();
-        REQUIRE(decodedAttrs.get<"state">().value() == meta::InstrumentState::Suspended);
+        REQUIRE(decodedAttrs.get<"state">().value() == metadata::InstrumentState::Suspended);
         REQUIRE_FALSE(decodedAttrs.get<"multiplier">().present());
         // data fields are decoded sequentially: exchangeSymbol first
         REQUIRE_EQ(decoded.get<"exchangeSymbol">().value(), std::string_view{"BTCUSDT"});
@@ -166,7 +166,7 @@ TEST_SUITE("MetaSchema") {
     TEST_CASE("InstrumentRequest: optional filters") {
         std::array<std::byte, 128> buffer{};
 
-        auto msg = meta::InstrumentRequest::wrapAndApplyHeader(buffer);
+        auto msg = metadata::InstrumentRequest::wrapAndApplyHeader(buffer);
         msg.get<"appId">().value(17);
         msg.get<"requestId">().value(5);
         msg.get<"instrumentId">().value(42);
@@ -176,8 +176,8 @@ TEST_SUITE("MetaSchema") {
         msg.get<"state">().reset();
         msg.get<"exchangeSymbol">().value("");
 
-        auto header = meta::MessageHeader{buffer.data()};
-        auto decoded = meta::InstrumentRequest{
+        auto header = metadata::MessageHeader{buffer.data()};
+        auto decoded = metadata::InstrumentRequest{
             buffer, header.sbeEncodedLength(), header.get<"blockLength">().value(), header.get<"version">().value()};
         REQUIRE_EQ(decoded.get<"instrumentId">().value(), 42);
         REQUIRE_FALSE(decoded.get<"venueId">().present());
@@ -190,15 +190,15 @@ TEST_SUITE("MetaSchema") {
     TEST_CASE("ServiceRequest: all filters empty means all services") {
         std::array<std::byte, 128> buffer{};
 
-        auto msg = meta::ServiceRequest::wrapAndApplyHeader(buffer);
+        auto msg = metadata::ServiceRequest::wrapAndApplyHeader(buffer);
         msg.get<"appId">().value(17);
         msg.get<"requestId">().value(5);
         msg.get<"serviceId">().reset();
         msg.get<"state">().reset();
         msg.get<"name">().value("");
 
-        auto header = meta::MessageHeader{buffer.data()};
-        auto decoded = meta::ServiceRequest{
+        auto header = metadata::MessageHeader{buffer.data()};
+        auto decoded = metadata::ServiceRequest{
             buffer, header.sbeEncodedLength(), header.get<"blockLength">().value(), header.get<"version">().value()};
         REQUIRE_FALSE(decoded.get<"serviceId">().present());
         REQUIRE_FALSE(decoded.get<"state">().present());
@@ -208,24 +208,24 @@ TEST_SUITE("MetaSchema") {
     TEST_CASE("ServiceDefinition round trip") {
         std::array<std::byte, 256> buffer{};
 
-        auto msg = meta::ServiceDefinition::wrapAndApplyHeader(buffer);
+        auto msg = metadata::ServiceDefinition::wrapAndApplyHeader(buffer);
         msg.get<"appId">().value(17); // response to ServiceRequest
         msg.get<"requestId">().value(5);
         msg.get<"serviceId">().value(3);
         msg.get<"version">().value(4);
         msg.get<"reportedTs">().value(1'775'000'000'000'000'100);
-        msg.get<"state">().value(meta::ServiceState::Active);
+        msg.get<"state">().value(metadata::ServiceState::Active);
         msg.get<"name">().value("md-binance-1");
         msg.get<"dataQueue">().value("md-binance-1/data");
         msg.get<"requestQueue">().value("md-binance-1/req");
 
-        auto header = meta::MessageHeader{buffer.data()};
-        REQUIRE_EQ(header.get<"templateId">().value(), meta::ServiceDefinition::sbeTemplateId());
-        auto decoded = meta::ServiceDefinition{
+        auto header = metadata::MessageHeader{buffer.data()};
+        REQUIRE_EQ(header.get<"templateId">().value(), metadata::ServiceDefinition::sbeTemplateId());
+        auto decoded = metadata::ServiceDefinition{
             buffer, header.sbeEncodedLength(), header.get<"blockLength">().value(), header.get<"version">().value()};
         REQUIRE_EQ(decoded.get<"serviceId">().value(), 3);
         REQUIRE_EQ(decoded.get<"version">().value(), 4);
-        REQUIRE(decoded.get<"state">().value() == meta::ServiceState::Active);
+        REQUIRE(decoded.get<"state">().value() == metadata::ServiceState::Active);
         REQUIRE_EQ(decoded.get<"name">().value(), std::string_view{"md-binance-1"});
         REQUIRE_EQ(decoded.get<"dataQueue">().value(), std::string_view{"md-binance-1/data"});
         REQUIRE_EQ(decoded.get<"requestQueue">().value(), std::string_view{"md-binance-1/req"});
@@ -234,17 +234,17 @@ TEST_SUITE("MetaSchema") {
     TEST_CASE("RequestComplete terminates the request response") {
         std::array<std::byte, 64> buffer{};
 
-        auto msg = meta::RequestComplete::wrapAndApplyHeader(buffer);
+        auto msg = metadata::RequestComplete::wrapAndApplyHeader(buffer);
         msg.get<"appId">().value(17);
         msg.get<"requestId">().value(5);
-        msg.get<"status">().value(meta::RequestStatus::Ok);
+        msg.get<"status">().value(metadata::RequestStatus::Ok);
         msg.get<"count">().value(2);
 
-        auto header = meta::MessageHeader{buffer.data()};
-        REQUIRE_EQ(header.get<"schemaId">().value(), meta::RequestComplete::sbeSchemaId());
-        auto decoded = meta::RequestComplete{
+        auto header = metadata::MessageHeader{buffer.data()};
+        REQUIRE_EQ(header.get<"schemaId">().value(), metadata::RequestComplete::sbeSchemaId());
+        auto decoded = metadata::RequestComplete{
             buffer, header.sbeEncodedLength(), header.get<"blockLength">().value(), header.get<"version">().value()};
-        REQUIRE(decoded.get<"status">().value() == meta::RequestStatus::Ok);
+        REQUIRE(decoded.get<"status">().value() == metadata::RequestStatus::Ok);
         REQUIRE_EQ(decoded.get<"count">().value(), 2);
     }
 }

@@ -16,7 +16,7 @@
 #include "mixin/SBESendMixin.h"
 #include "testing/TestQueue.h"
 #include <turbofw/mp/List.h>
-#include <turbofw/svc/schema.h>
+#include <turbofw/schema/service/schema.h>
 
 namespace turbofw::testing {
 namespace {
@@ -32,19 +32,19 @@ struct TestConsumer : public testing::Consumer, public mixin::ReceiveMixin {
 };
 
 /// Decodes the flag set of the Heartbeat carried by a queue buffer
-auto decodeHeartbeat(std::span<std::byte const> buffer) -> svc::ServiceFlags {
-    auto const header = svc::MessageHeader{const_cast<std::byte*>(buffer.data())};
-    auto msg = svc::Heartbeat{std::span<std::byte>{const_cast<std::byte*>(buffer.data()), buffer.size()},
+auto decodeHeartbeat(std::span<std::byte const> buffer) -> service::ServiceFlags {
+    auto const header = service::MessageHeader{const_cast<std::byte*>(buffer.data())};
+    auto msg = service::Heartbeat{std::span<std::byte>{const_cast<std::byte*>(buffer.data()), buffer.size()},
         header.sbeEncodedLength(), header.get<"blockLength">().value(), header.get<"version">().value()};
     return msg.get<"flags">().value();
 }
 
 /// Drains the queue and returns the flag sets of the Heartbeat messages in it (other message types are discarded)
-auto drainedHeartbeatFlags(TestConsumer& consumer) -> std::vector<svc::ServiceFlags> {
-    std::vector<svc::ServiceFlags> result;
+auto drainedHeartbeatFlags(TestConsumer& consumer) -> std::vector<service::ServiceFlags> {
+    std::vector<service::ServiceFlags> result;
     consumer.receive([&](std::span<std::byte const> buffer) {
-        auto const header = svc::MessageHeader{const_cast<std::byte*>(buffer.data())};
-        if (header.get<"templateId">().value() == svc::Heartbeat::sbeTemplateId()) {
+        auto const header = service::MessageHeader{const_cast<std::byte*>(buffer.data())};
+        if (header.get<"templateId">().value() == service::Heartbeat::sbeTemplateId()) {
             result.push_back(decodeHeartbeat(buffer));
         }
     });
@@ -104,8 +104,8 @@ TEST_SUITE("SBEKeepAliveMixin") {
         std::this_thread::sleep_for(std::chrono::milliseconds{2}); // the interval elapses in silence
 
         // a message through the same producer counts as activity and restarts the silence timer
-        auto const sent = producer.send<svc::SetLogLevel>([](svc::SetLogLevel msg) {
-            msg.get<"level">().value(svc::LogLevel::Info);
+        auto const sent = producer.send<service::SetLogLevel>([](service::SetLogLevel msg) {
+            msg.get<"level">().value(service::LogLevel::Info);
         });
         REQUIRE(sent);
         producer.keepAlive();
@@ -183,8 +183,8 @@ TEST_SUITE("SBEKeepAliveMixin") {
         CHECK_EQ(drainedHeartbeatFlags(consumer).size(), 0);
 
         // any publication re-arms with the current interval: the next silence beat comes 1ms later
-        auto const sent = producer.send<svc::SetLogLevel>([](svc::SetLogLevel msg) {
-            msg.get<"level">().value(svc::LogLevel::Info);
+        auto const sent = producer.send<service::SetLogLevel>([](service::SetLogLevel msg) {
+            msg.get<"level">().value(service::LogLevel::Info);
         });
         REQUIRE(sent);
         std::this_thread::sleep_for(std::chrono::milliseconds{2});

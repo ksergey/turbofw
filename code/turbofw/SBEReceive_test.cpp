@@ -9,8 +9,8 @@
 
 #include <doctest/doctest.h>
 
-#include <turbofw/md/schema.h>
-#include <turbofw/svc/schema.h>
+#include <turbofw/schema/market_data/schema.h>
+#include <turbofw/schema/service/schema.h>
 
 #include "mixin/SBEReceiveMixin.h"
 #include "mixin/SBESendMixin.h"
@@ -53,7 +53,7 @@ struct TestSBEProducer : public testing::Producer, public mixin::SBESendMixin {
 };
 
 /// Consumer composed with the hook mixins; the receive mixin itself is not a hook, so it is not in `Mixins`
-using Filter = TemplateFilterMixin<svc::Heartbeat::sbeTemplateId()>;
+using Filter = TemplateFilterMixin<service::Heartbeat::sbeTemplateId()>;
 
 struct TaggedConsumer : public testing::Consumer,
                         public mixin::SBEReceiveMixin,
@@ -93,24 +93,25 @@ TEST_SUITE("SBEReceiveMixin") {
         auto consumer = TaggedConsumer{&queue, &log};
 
         // an empty queue: nothing received
-        auto const [nothing, noHandles, noDrops] = consumer.receive<mp::List<svc::Heartbeat>>([](svc::Heartbeat) {
-            FAIL("empty queue must not run");
-        });
+        auto const [nothing, noHandles, noDrops] =
+            consumer.receive<mp::List<service::Heartbeat>>([](service::Heartbeat) {
+                FAIL("empty queue must not run");
+            });
         CHECK_EQ(nothing, 0);
         CHECK_EQ(noHandles, 0);
         CHECK_EQ(noDrops, 0);
 
         // a message of the same schema the list does not expect: received, but neither handled nor dropped
-        auto const foreign = producer.send<svc::SetLogLevel>([](svc::SetLogLevel msg) {
-            msg.get<"level">().value(svc::LogLevel::Error);
+        auto const foreign = producer.send<service::SetLogLevel>([](service::SetLogLevel msg) {
+            msg.get<"level">().value(service::LogLevel::Error);
         });
         REQUIRE(foreign);
 
         // the expected message
-        auto const beat = producer.send<svc::Heartbeat>([](svc::Heartbeat msg) {
+        auto const beat = producer.send<service::Heartbeat>([](service::Heartbeat msg) {
             msg.get<"ts">().value(222);
             msg.get<"serviceId">().value(1);
-            msg.get<"flags">().value(svc::ServiceFlags{}.start(true));
+            msg.get<"flags">().value(service::ServiceFlags{}.start(true));
         });
         REQUIRE(beat);
 
@@ -121,7 +122,7 @@ TEST_SUITE("SBEReceiveMixin") {
 
         auto calls = 0;
         auto const [received, handled, dropped] =
-            consumer.receive<mp::List<svc::Heartbeat>>([&calls](svc::Heartbeat msg) {
+            consumer.receive<mp::List<service::Heartbeat>>([&calls](service::Heartbeat msg) {
                 ++calls;
                 CHECK_EQ(msg.get<"ts">().value(), 222);
                 auto flags = msg.get<"flags">().value();
@@ -135,16 +136,17 @@ TEST_SUITE("SBEReceiveMixin") {
         // hooks saw both real messages (the dropped one is too short to read a header at all): heartbeats from
         // the list AND the foreign SetLogLevel whose hook-side audit is the hook's own job
         REQUIRE_EQ(log.size(), 2);
-        CHECK_EQ(log[0], std::make_pair('a', svc::SetLogLevel::sbeTemplateId()));
-        CHECK_EQ(log[1], std::make_pair('a', svc::Heartbeat::sbeTemplateId()));
+        CHECK_EQ(log[0], std::make_pair('a', service::SetLogLevel::sbeTemplateId()));
+        CHECK_EQ(log[1], std::make_pair('a', service::Heartbeat::sbeTemplateId()));
 
         // the self-demultiplexing hook counted only the heartbeat, not the foreign message
         CHECK_EQ(consumer.Filter::count, 1);
 
         // the queue is drained
-        auto const [empty, emptyHandled, emptyDropped] = consumer.receive<mp::List<svc::Heartbeat>>([](svc::Heartbeat) {
-            FAIL("the queue must be drained");
-        });
+        auto const [empty, emptyHandled, emptyDropped] =
+            consumer.receive<mp::List<service::Heartbeat>>([](service::Heartbeat) {
+                FAIL("the queue must be drained");
+            });
         CHECK_EQ(empty, 0);
         CHECK_EQ(emptyHandled, 0);
         CHECK_EQ(emptyDropped, 0);
@@ -155,22 +157,23 @@ TEST_SUITE("SBEReceiveMixin") {
         auto producer = TestSBEProducer{&queue};
         auto consumer = PlainConsumer{&queue};
 
-        auto const foreign = producer.send<svc::SetLogLevel>([](svc::SetLogLevel msg) {
-            msg.get<"level">().value(svc::LogLevel::Warn);
+        auto const foreign = producer.send<service::SetLogLevel>([](service::SetLogLevel msg) {
+            msg.get<"level">().value(service::LogLevel::Warn);
         });
         REQUIRE(foreign);
-        auto const beat = producer.send<svc::Heartbeat>([](svc::Heartbeat msg) {
+        auto const beat = producer.send<service::Heartbeat>([](service::Heartbeat msg) {
             msg.get<"ts">().value(7);
             msg.get<"serviceId">().value(2);
-            msg.get<"flags">().value(svc::ServiceFlags{});
+            msg.get<"flags">().value(service::ServiceFlags{});
         });
         REQUIRE(beat);
 
         auto calls = 0;
-        auto const [received, handled, dropped] = consumer.receive<svc::Heartbeat>([&calls](svc::Heartbeat msg) {
-            ++calls;
-            CHECK_EQ(msg.get<"ts">().value(), 7);
-        });
+        auto const [received, handled, dropped] =
+            consumer.receive<service::Heartbeat>([&calls](service::Heartbeat msg) {
+                ++calls;
+                CHECK_EQ(msg.get<"ts">().value(), 7);
+            });
         CHECK_EQ(received, 2);
         CHECK_EQ(handled, 1);
         CHECK_EQ(dropped, 0); // the SetLogLevel has a readable header, it is foreign, not garbage
@@ -184,22 +187,23 @@ TEST_SUITE("SBEReceiveMixin") {
         auto log = std::vector<std::pair<char, std::uint16_t>>{};
         auto consumer = OrderedConsumer{&queue, &log};
 
-        auto const beat = producer.send<svc::Heartbeat>([](svc::Heartbeat msg) {
+        auto const beat = producer.send<service::Heartbeat>([](service::Heartbeat msg) {
             msg.get<"ts">().value(2);
             msg.get<"serviceId">().value(1);
-            msg.get<"flags">().value(svc::ServiceFlags{});
+            msg.get<"flags">().value(service::ServiceFlags{});
         });
         REQUIRE(beat);
 
-        auto const [received, handled, dropped] = consumer.receive<mp::List<svc::Heartbeat>>([](svc::Heartbeat) {});
+        auto const [received, handled, dropped] =
+            consumer.receive<mp::List<service::Heartbeat>>([](service::Heartbeat) {});
         CHECK_EQ(received, 1);
         CHECK_EQ(handled, 1);
         CHECK_EQ(dropped, 0);
 
         // both hooks fired for the same message, first 'a' then 'b': the `Mixins` list order
         REQUIRE_EQ(log.size(), 2);
-        CHECK_EQ(log[0], std::make_pair('a', svc::Heartbeat::sbeTemplateId()));
-        CHECK_EQ(log[1], std::make_pair('b', svc::Heartbeat::sbeTemplateId()));
+        CHECK_EQ(log[0], std::make_pair('a', service::Heartbeat::sbeTemplateId()));
+        CHECK_EQ(log[1], std::make_pair('b', service::Heartbeat::sbeTemplateId()));
     }
 }
 
