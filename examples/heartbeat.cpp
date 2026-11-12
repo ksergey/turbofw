@@ -1,8 +1,8 @@
 // Copyright (c) Sergey Kovalevich <inndie@gmail.com>
 // SPDX-License-Identifier: MIT
 
-/// A minimal service that publishes service::Heartbeat on its multicast queue, showcasing SBEKeepAliveMixin:
-/// a Start heartbeat on startHeartbeating(), periodic ones while the wire is silent, a Stop one on
+/// A minimal service that publishes turbofw::schema::service::Heartbeat on its multicast queue, showcasing
+/// SBEKeepAliveMixin: a Start heartbeat on startHeartbeating(), periodic ones while the wire is silent, a Stop one on
 /// stopHeartbeating(). The service's mpsc queue is opened but serves nothing (a real service would
 /// answer e.g. SetLogLevel requests there).
 ///

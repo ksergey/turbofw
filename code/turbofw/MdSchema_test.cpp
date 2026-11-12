@@ -14,24 +14,24 @@ TEST_SUITE("MdSchema") {
     TEST_CASE("MbpUpdate encode/decode round trip") {
         std::array<std::byte, 128> buffer{};
 
-        auto msg = market_data::MbpUpdate::wrapAndApplyHeader(buffer);
+        auto msg = turbofw::schema::market_data::MbpUpdate::wrapAndApplyHeader(buffer);
         auto header = msg.get<"header">();
         header.get<"instrumentId">().value(42);
         header.get<"exchangeTs">().value(1'234'567'890);
         header.get<"receiveTs">().value(9'876'543'210);
-        header.get<"flags">().value(market_data::MdFlags{}.endOfEvent(true));
-        msg.get<"side">().value(market_data::Side::Bid);
-        msg.get<"action">().value(market_data::UpdateAction::Change);
+        header.get<"flags">().value(turbofw::schema::market_data::MdFlags{}.endOfEvent(true));
+        msg.get<"side">().value(turbofw::schema::market_data::Side::Bid);
+        msg.get<"action">().value(turbofw::schema::market_data::UpdateAction::Change);
         msg.get<"level">().value(3);
         msg.get<"price">().get<"mantissa">().value(10'050);
         msg.get<"qty">().value(3);
         msg.get<"orders">().value(12);
 
-        auto mdHeader = market_data::MessageHeader{buffer.data()};
-        REQUIRE_EQ(mdHeader.get<"schemaId">().value(), market_data::MbpUpdate::sbeSchemaId());
-        REQUIRE_EQ(mdHeader.get<"templateId">().value(), market_data::MbpUpdate::sbeTemplateId());
+        auto mdHeader = turbofw::schema::market_data::MessageHeader{buffer.data()};
+        REQUIRE_EQ(mdHeader.get<"schemaId">().value(), turbofw::schema::market_data::MbpUpdate::sbeSchemaId());
+        REQUIRE_EQ(mdHeader.get<"templateId">().value(), turbofw::schema::market_data::MbpUpdate::sbeTemplateId());
 
-        auto decoded = market_data::MbpUpdate{buffer, mdHeader.sbeEncodedLength(),
+        auto decoded = turbofw::schema::market_data::MbpUpdate{buffer, mdHeader.sbeEncodedLength(),
             mdHeader.get<"blockLength">().value(), mdHeader.get<"version">().value()};
         auto decodedHeader = decoded.get<"header">();
         REQUIRE_EQ(decodedHeader.get<"instrumentId">().value(), 42);
@@ -40,8 +40,8 @@ TEST_SUITE("MdSchema") {
         auto flags = decodedHeader.get<"flags">().value();
         REQUIRE(flags.endOfEvent());
         REQUIRE_FALSE(flags.snapshot());
-        REQUIRE_EQ(decoded.get<"side">().value(), market_data::Side::Bid);
-        REQUIRE(decoded.get<"action">().value() == market_data::UpdateAction::Change);
+        REQUIRE_EQ(decoded.get<"side">().value(), turbofw::schema::market_data::Side::Bid);
+        REQUIRE(decoded.get<"action">().value() == turbofw::schema::market_data::UpdateAction::Change);
         REQUIRE_EQ(decoded.get<"level">().value(), 3);
         REQUIRE(decoded.get<"price">().present());
         REQUIRE_EQ(decoded.get<"price">().get<"mantissa">().value(), 10'050);
@@ -54,34 +54,34 @@ TEST_SUITE("MdSchema") {
     TEST_CASE("MboUpdate encode/decode round trip") {
         std::array<std::byte, 128> buffer{};
 
-        auto msg = market_data::MboUpdate::wrapAndApplyHeader(buffer);
+        auto msg = turbofw::schema::market_data::MboUpdate::wrapAndApplyHeader(buffer);
         auto header = msg.get<"header">();
         header.get<"instrumentId">().value(42);
         header.get<"exchangeTs">().reset(); // venue does not provide event time here
         header.get<"receiveTs">().value(9'876'543'210);
-        header.get<"flags">().value(market_data::MdFlags{}.endOfEvent(true));
+        header.get<"flags">().value(turbofw::schema::market_data::MdFlags{}.endOfEvent(true));
         msg.get<"orderId">().value(123'456'789u);
-        msg.get<"side">().value(market_data::Side::Ask);
-        msg.get<"action">().value(market_data::UpdateAction::Change);
+        msg.get<"side">().value(turbofw::schema::market_data::Side::Ask);
+        msg.get<"action">().value(turbofw::schema::market_data::UpdateAction::Change);
         msg.get<"price">().get<"mantissa">().value(10'050);
         msg.get<"qty">().value(3);
         msg.get<"prevPrice">().get<"mantissa">().value(10'048);
         msg.get<"prevQty">().value(5);
         msg.get<"priority">().value(7u);
 
-        auto mdHeader = market_data::MessageHeader{buffer.data()};
-        REQUIRE_EQ(mdHeader.get<"schemaId">().value(), market_data::MboUpdate::sbeSchemaId());
-        REQUIRE_EQ(mdHeader.get<"templateId">().value(), market_data::MboUpdate::sbeTemplateId());
+        auto mdHeader = turbofw::schema::market_data::MessageHeader{buffer.data()};
+        REQUIRE_EQ(mdHeader.get<"schemaId">().value(), turbofw::schema::market_data::MboUpdate::sbeSchemaId());
+        REQUIRE_EQ(mdHeader.get<"templateId">().value(), turbofw::schema::market_data::MboUpdate::sbeTemplateId());
 
-        auto decoded = market_data::MboUpdate{buffer, mdHeader.sbeEncodedLength(),
+        auto decoded = turbofw::schema::market_data::MboUpdate{buffer, mdHeader.sbeEncodedLength(),
             mdHeader.get<"blockLength">().value(), mdHeader.get<"version">().value()};
         auto decodedHeader = decoded.get<"header">();
         REQUIRE_EQ(decodedHeader.get<"instrumentId">().value(), 42);
         REQUIRE_FALSE(decodedHeader.get<"exchangeTs">().present());
         REQUIRE_EQ(decodedHeader.get<"receiveTs">().value(), 9'876'543'210);
         REQUIRE_EQ(decoded.get<"orderId">().value(), 123'456'789u);
-        REQUIRE(decoded.get<"side">().value() == market_data::Side::Ask);
-        REQUIRE(decoded.get<"action">().value() == market_data::UpdateAction::Change);
+        REQUIRE(decoded.get<"side">().value() == turbofw::schema::market_data::Side::Ask);
+        REQUIRE(decoded.get<"action">().value() == turbofw::schema::market_data::UpdateAction::Change);
         REQUIRE(decoded.get<"price">().present());
         REQUIRE_EQ(decoded.get<"price">().get<"mantissa">().value(), 10'050);
         REQUIRE_EQ(decoded.get<"qty">().value(), 3);
@@ -93,20 +93,20 @@ TEST_SUITE("MdSchema") {
     TEST_CASE("MboUpdate Clear: price/qty are null") {
         std::array<std::byte, 128> buffer{};
 
-        auto msg = market_data::MboUpdate::wrapAndApplyHeader(buffer);
+        auto msg = turbofw::schema::market_data::MboUpdate::wrapAndApplyHeader(buffer);
         msg.get<"header">().get<"instrumentId">().value(42);
         msg.get<"orderId">().reset(); // Clear: orderId is not meaningful
-        msg.get<"action">().value(market_data::UpdateAction::Clear);
+        msg.get<"action">().value(turbofw::schema::market_data::UpdateAction::Clear);
         msg.get<"price">().get<"mantissa">().reset();
         msg.get<"qty">().reset();
         msg.get<"prevPrice">().get<"mantissa">().reset();
         msg.get<"prevQty">().reset();
 
-        auto mdHeader = market_data::MessageHeader{buffer.data()};
-        auto decoded = market_data::MboUpdate{buffer, mdHeader.sbeEncodedLength(),
+        auto mdHeader = turbofw::schema::market_data::MessageHeader{buffer.data()};
+        auto decoded = turbofw::schema::market_data::MboUpdate{buffer, mdHeader.sbeEncodedLength(),
             mdHeader.get<"blockLength">().value(), mdHeader.get<"version">().value()};
         REQUIRE_FALSE(decoded.get<"orderId">().present());
-        REQUIRE(decoded.get<"action">().value() == market_data::UpdateAction::Clear);
+        REQUIRE(decoded.get<"action">().value() == turbofw::schema::market_data::UpdateAction::Clear);
         REQUIRE_FALSE(decoded.get<"price">().present());
         REQUIRE_FALSE(decoded.get<"qty">().present());
         REQUIRE_FALSE(decoded.get<"prevPrice">().present());
@@ -114,16 +114,16 @@ TEST_SUITE("MdSchema") {
     }
 
     TEST_CASE("Price9: constant exponent -9, only the mantissa is encoded") {
-        static_assert(market_data::Price9::sbeEncodedLength() == sizeof(std::int64_t));
-        static_assert(market_data::Price9NULL::sbeEncodedLength() == sizeof(std::int64_t));
+        static_assert(turbofw::schema::market_data::Price9::sbeEncodedLength() == sizeof(std::int64_t));
+        static_assert(turbofw::schema::market_data::Price9NULL::sbeEncodedLength() == sizeof(std::int64_t));
 
         std::array<std::byte, 128> buffer{};
-        auto msg = market_data::Trade::wrapAndApplyHeader(buffer);
+        auto msg = turbofw::schema::market_data::Trade::wrapAndApplyHeader(buffer);
         msg.get<"price">().get<"mantissa">().value(1'500'000'000); // 1.5
 
-        auto mdHeader = market_data::MessageHeader{buffer.data()};
-        auto decoded = market_data::Trade{buffer, mdHeader.sbeEncodedLength(), mdHeader.get<"blockLength">().value(),
-            mdHeader.get<"version">().value()};
+        auto mdHeader = turbofw::schema::market_data::MessageHeader{buffer.data()};
+        auto decoded = turbofw::schema::market_data::Trade{buffer, mdHeader.sbeEncodedLength(),
+            mdHeader.get<"blockLength">().value(), mdHeader.get<"version">().value()};
         REQUIRE_EQ(decoded.get<"price">().get<"mantissa">().value(), 1'500'000'000);
         REQUIRE_EQ(decoded.get<"price">().get<"exponent">().value(), -9);
     }
@@ -131,47 +131,47 @@ TEST_SUITE("MdSchema") {
     TEST_CASE("Trade round trip") {
         std::array<std::byte, 128> buffer{};
 
-        auto msg = market_data::Trade::wrapAndApplyHeader(buffer);
+        auto msg = turbofw::schema::market_data::Trade::wrapAndApplyHeader(buffer);
         auto header = msg.get<"header">();
         header.get<"instrumentId">().value(42);
         header.get<"exchangeTs">().value(1'234'567'890);
         header.get<"receiveTs">().value(9'876'543'210);
-        header.get<"flags">().value(market_data::MdFlags{});
+        header.get<"flags">().value(turbofw::schema::market_data::MdFlags{});
         msg.get<"tradeId">().value(987'654'321u);
         msg.get<"price">().get<"mantissa">().value(10'050);
         msg.get<"qty">().value(3);
-        msg.get<"aggressor">().value(market_data::Side::Ask);
+        msg.get<"aggressor">().value(turbofw::schema::market_data::Side::Ask);
         msg.get<"conditions">().value(0u);
 
-        auto mdHeader = market_data::MessageHeader{buffer.data()};
-        REQUIRE_EQ(mdHeader.get<"schemaId">().value(), market_data::Trade::sbeSchemaId());
-        REQUIRE_EQ(mdHeader.get<"templateId">().value(), market_data::Trade::sbeTemplateId());
+        auto mdHeader = turbofw::schema::market_data::MessageHeader{buffer.data()};
+        REQUIRE_EQ(mdHeader.get<"schemaId">().value(), turbofw::schema::market_data::Trade::sbeSchemaId());
+        REQUIRE_EQ(mdHeader.get<"templateId">().value(), turbofw::schema::market_data::Trade::sbeTemplateId());
 
-        auto decoded = market_data::Trade{buffer, mdHeader.sbeEncodedLength(), mdHeader.get<"blockLength">().value(),
-            mdHeader.get<"version">().value()};
+        auto decoded = turbofw::schema::market_data::Trade{buffer, mdHeader.sbeEncodedLength(),
+            mdHeader.get<"blockLength">().value(), mdHeader.get<"version">().value()};
         REQUIRE_EQ(decoded.get<"header">().get<"instrumentId">().value(), 42);
         REQUIRE(decoded.get<"tradeId">().present());
         REQUIRE_EQ(decoded.get<"tradeId">().value(), 987'654'321u);
         REQUIRE_EQ(decoded.get<"price">().get<"mantissa">().value(), 10'050);
         REQUIRE_EQ(decoded.get<"qty">().value(), 3);
         REQUIRE(decoded.get<"aggressor">().present());
-        REQUIRE(decoded.get<"aggressor">().value() == market_data::Side::Ask);
+        REQUIRE(decoded.get<"aggressor">().value() == turbofw::schema::market_data::Side::Ask);
         REQUIRE_EQ(decoded.get<"conditions">().value(), 0u);
     }
 
     TEST_CASE("Trade: unknown aggressor is null") {
         std::array<std::byte, 128> buffer{};
 
-        auto msg = market_data::Trade::wrapAndApplyHeader(buffer);
+        auto msg = turbofw::schema::market_data::Trade::wrapAndApplyHeader(buffer);
         msg.get<"header">().get<"instrumentId">().value(42);
         msg.get<"tradeId">().reset(); // venue does not provide trade id
         msg.get<"price">().get<"mantissa">().value(10'050);
         msg.get<"qty">().value(3);
         msg.get<"aggressor">().reset();
 
-        auto mdHeader = market_data::MessageHeader{buffer.data()};
-        auto decoded = market_data::Trade{buffer, mdHeader.sbeEncodedLength(), mdHeader.get<"blockLength">().value(),
-            mdHeader.get<"version">().value()};
+        auto mdHeader = turbofw::schema::market_data::MessageHeader{buffer.data()};
+        auto decoded = turbofw::schema::market_data::Trade{buffer, mdHeader.sbeEncodedLength(),
+            mdHeader.get<"blockLength">().value(), mdHeader.get<"version">().value()};
         REQUIRE_FALSE(decoded.get<"tradeId">().present());
         REQUIRE_FALSE(decoded.get<"aggressor">().present());
     }
@@ -179,17 +179,17 @@ TEST_SUITE("MdSchema") {
     TEST_CASE("Statistic: volume-like type goes to qty") {
         std::array<std::byte, 128> buffer{};
 
-        auto msg = market_data::Statistic::wrapAndApplyHeader(buffer);
+        auto msg = turbofw::schema::market_data::Statistic::wrapAndApplyHeader(buffer);
         msg.get<"header">().get<"instrumentId">().value(42);
-        msg.get<"type">().value(market_data::StatType::Volume);
+        msg.get<"type">().value(turbofw::schema::market_data::StatType::Volume);
         msg.get<"price">().get<"mantissa">().reset(); // price-like field is not used by Volume
         msg.get<"qty">().value(1'250'000);
 
-        auto mdHeader = market_data::MessageHeader{buffer.data()};
-        REQUIRE_EQ(mdHeader.get<"schemaId">().value(), market_data::Statistic::sbeSchemaId());
-        auto decoded = market_data::Statistic{buffer, mdHeader.sbeEncodedLength(),
+        auto mdHeader = turbofw::schema::market_data::MessageHeader{buffer.data()};
+        REQUIRE_EQ(mdHeader.get<"schemaId">().value(), turbofw::schema::market_data::Statistic::sbeSchemaId());
+        auto decoded = turbofw::schema::market_data::Statistic{buffer, mdHeader.sbeEncodedLength(),
             mdHeader.get<"blockLength">().value(), mdHeader.get<"version">().value()};
-        REQUIRE(decoded.get<"type">().value() == market_data::StatType::Volume);
+        REQUIRE(decoded.get<"type">().value() == turbofw::schema::market_data::StatType::Volume);
         REQUIRE_FALSE(decoded.get<"price">().present());
         REQUIRE(decoded.get<"qty">().present());
         REQUIRE_EQ(decoded.get<"qty">().value(), 1'250'000);
@@ -198,16 +198,16 @@ TEST_SUITE("MdSchema") {
     TEST_CASE("Statistic: price-like type goes to price") {
         std::array<std::byte, 128> buffer{};
 
-        auto msg = market_data::Statistic::wrapAndApplyHeader(buffer);
+        auto msg = turbofw::schema::market_data::Statistic::wrapAndApplyHeader(buffer);
         msg.get<"header">().get<"instrumentId">().value(42);
-        msg.get<"type">().value(market_data::StatType::Vwap);
+        msg.get<"type">().value(turbofw::schema::market_data::StatType::Vwap);
         msg.get<"price">().get<"mantissa">().value(10'047);
         msg.get<"qty">().reset();
 
-        auto mdHeader = market_data::MessageHeader{buffer.data()};
-        auto decoded = market_data::Statistic{buffer, mdHeader.sbeEncodedLength(),
+        auto mdHeader = turbofw::schema::market_data::MessageHeader{buffer.data()};
+        auto decoded = turbofw::schema::market_data::Statistic{buffer, mdHeader.sbeEncodedLength(),
             mdHeader.get<"blockLength">().value(), mdHeader.get<"version">().value()};
-        REQUIRE(decoded.get<"type">().value() == market_data::StatType::Vwap);
+        REQUIRE(decoded.get<"type">().value() == turbofw::schema::market_data::StatType::Vwap);
         REQUIRE_EQ(decoded.get<"price">().get<"mantissa">().value(), 10'047);
         REQUIRE_FALSE(decoded.get<"qty">().present());
     }
@@ -215,13 +215,14 @@ TEST_SUITE("MdSchema") {
     TEST_CASE("InstrumentStatus round trip") {
         std::array<std::byte, 128> buffer{};
 
-        auto msg = market_data::InstrumentStatus::wrapAndApplyHeader(buffer);
+        auto msg = turbofw::schema::market_data::InstrumentStatus::wrapAndApplyHeader(buffer);
         msg.get<"header">().get<"instrumentId">().value(42);
         msg.get<"tradingState">().value(2);
 
-        auto mdHeader = market_data::MessageHeader{buffer.data()};
-        REQUIRE_EQ(mdHeader.get<"templateId">().value(), market_data::InstrumentStatus::sbeTemplateId());
-        auto decoded = market_data::InstrumentStatus{buffer, mdHeader.sbeEncodedLength(),
+        auto mdHeader = turbofw::schema::market_data::MessageHeader{buffer.data()};
+        REQUIRE_EQ(
+            mdHeader.get<"templateId">().value(), turbofw::schema::market_data::InstrumentStatus::sbeTemplateId());
+        auto decoded = turbofw::schema::market_data::InstrumentStatus{buffer, mdHeader.sbeEncodedLength(),
             mdHeader.get<"blockLength">().value(), mdHeader.get<"version">().value()};
         REQUIRE_EQ(decoded.get<"header">().get<"instrumentId">().value(), 42);
         REQUIRE_EQ(decoded.get<"tradingState">().value(), 2);
@@ -230,11 +231,11 @@ TEST_SUITE("MdSchema") {
     TEST_CASE("Snapshot chunk round trip") {
         std::array<std::byte, 256> buffer{};
 
-        auto msg = market_data::Snapshot::wrapAndApplyHeader(buffer);
+        auto msg = turbofw::schema::market_data::Snapshot::wrapAndApplyHeader(buffer);
         auto header = msg.get<"header">();
         header.get<"instrumentId">().value(42);
         header.get<"receiveTs">().value(9'876'543'210);
-        header.get<"flags">().value(market_data::MdFlags{}.snapshot(true).mandatory(true));
+        header.get<"flags">().value(turbofw::schema::market_data::MdFlags{}.snapshot(true).mandatory(true));
         msg.get<"appId">().value(17); // response to SnapshotRequest
         msg.get<"requestId">().value(3);
         msg.get<"chunkNo">().value(0);
@@ -258,16 +259,16 @@ TEST_SUITE("MdSchema") {
         auto stats = msg.get<"stats">();
         stats.reset(1);
         auto& stat = stats.next();
-        stat.get<"type">().value(market_data::StatType::Open);
+        stat.get<"type">().value(turbofw::schema::market_data::StatType::Open);
         stat.get<"price">().get<"mantissa">().value(99);
         stat.get<"qty">().reset();
         stat.get<"exchangeTs">().value(1'000'000'000);
 
-        auto mdHeader = market_data::MessageHeader{buffer.data()};
-        REQUIRE_EQ(mdHeader.get<"schemaId">().value(), market_data::Snapshot::sbeSchemaId());
-        REQUIRE_EQ(mdHeader.get<"templateId">().value(), market_data::Snapshot::sbeTemplateId());
-        auto decoded = market_data::Snapshot{buffer, mdHeader.sbeEncodedLength(), mdHeader.get<"blockLength">().value(),
-            mdHeader.get<"version">().value()};
+        auto mdHeader = turbofw::schema::market_data::MessageHeader{buffer.data()};
+        REQUIRE_EQ(mdHeader.get<"schemaId">().value(), turbofw::schema::market_data::Snapshot::sbeSchemaId());
+        REQUIRE_EQ(mdHeader.get<"templateId">().value(), turbofw::schema::market_data::Snapshot::sbeTemplateId());
+        auto decoded = turbofw::schema::market_data::Snapshot{buffer, mdHeader.sbeEncodedLength(),
+            mdHeader.get<"blockLength">().value(), mdHeader.get<"version">().value()};
 
         auto decodedFlags = decoded.get<"header">().get<"flags">().value();
         REQUIRE(decodedFlags.snapshot());
@@ -293,7 +294,7 @@ TEST_SUITE("MdSchema") {
         auto decodedStats = decoded.get<"stats">();
         REQUIRE_EQ(decodedStats.count(), 1);
         auto decodedStat = decodedStats.next();
-        REQUIRE(decodedStat.get<"type">().value() == market_data::StatType::Open);
+        REQUIRE(decodedStat.get<"type">().value() == turbofw::schema::market_data::StatType::Open);
         REQUIRE_EQ(decodedStat.get<"price">().get<"mantissa">().value(), 99);
         REQUIRE_FALSE(decodedStat.get<"qty">().present());
         REQUIRE_EQ(decodedStat.get<"exchangeTs">().value(), 1'000'000'000);
@@ -302,7 +303,7 @@ TEST_SUITE("MdSchema") {
     TEST_CASE("Snapshot: spontaneous, empty book, stats only in chunk 0") {
         std::array<std::byte, 128> buffer{};
 
-        auto msg = market_data::Snapshot::wrapAndApplyHeader(buffer);
+        auto msg = turbofw::schema::market_data::Snapshot::wrapAndApplyHeader(buffer);
         msg.get<"header">().get<"instrumentId">().value(42);
         msg.get<"appId">().reset();    // spontaneous snapshot: no addressee
         msg.get<"chunkNo">().value(1); // stats are empty in the remaining chunks
@@ -312,9 +313,9 @@ TEST_SUITE("MdSchema") {
         msg.get<"asks">().reset(0);
         msg.get<"stats">().reset(0);
 
-        auto mdHeader = market_data::MessageHeader{buffer.data()};
-        auto decoded = market_data::Snapshot{buffer, mdHeader.sbeEncodedLength(), mdHeader.get<"blockLength">().value(),
-            mdHeader.get<"version">().value()};
+        auto mdHeader = turbofw::schema::market_data::MessageHeader{buffer.data()};
+        auto decoded = turbofw::schema::market_data::Snapshot{buffer, mdHeader.sbeEncodedLength(),
+            mdHeader.get<"blockLength">().value(), mdHeader.get<"version">().value()};
         REQUIRE_FALSE(decoded.get<"appId">().present());
         REQUIRE_EQ(decoded.get<"chunkNo">().value(), 1);
         REQUIRE_EQ(decoded.get<"bids">().count(), 0);
@@ -325,34 +326,35 @@ TEST_SUITE("MdSchema") {
     TEST_CASE("SnapshotRequest / RequestComplete round trip") {
         std::array<std::byte, 128> buffer{};
 
-        auto request = market_data::SnapshotRequest::wrapAndApplyHeader(buffer);
+        auto request = turbofw::schema::market_data::SnapshotRequest::wrapAndApplyHeader(buffer);
         request.get<"appId">().value(17);
         request.get<"requestId">().value(3);
         request.get<"instrumentId">().value(42);
         request.get<"depth">().value(10);
 
-        auto mdHeader = market_data::MessageHeader{buffer.data()};
-        REQUIRE_EQ(mdHeader.get<"schemaId">().value(), market_data::SnapshotRequest::sbeSchemaId());
-        auto decoded = market_data::SnapshotRequest{buffer, mdHeader.sbeEncodedLength(),
+        auto mdHeader = turbofw::schema::market_data::MessageHeader{buffer.data()};
+        REQUIRE_EQ(mdHeader.get<"schemaId">().value(), turbofw::schema::market_data::SnapshotRequest::sbeSchemaId());
+        auto decoded = turbofw::schema::market_data::SnapshotRequest{buffer, mdHeader.sbeEncodedLength(),
             mdHeader.get<"blockLength">().value(), mdHeader.get<"version">().value()};
         REQUIRE_EQ(decoded.get<"appId">().value(), 17);
         REQUIRE_EQ(decoded.get<"requestId">().value(), 3);
         REQUIRE_EQ(decoded.get<"instrumentId">().value(), 42);
         REQUIRE_EQ(decoded.get<"depth">().value(), 10);
 
-        auto response = market_data::RequestComplete::wrapAndApplyHeader(buffer);
+        auto response = turbofw::schema::market_data::RequestComplete::wrapAndApplyHeader(buffer);
         response.get<"appId">().value(17);
         response.get<"requestId">().value(3);
-        response.get<"status">().value(market_data::RequestStatus::Ok);
+        response.get<"status">().value(turbofw::schema::market_data::RequestStatus::Ok);
         response.get<"count">().value(4);
 
-        auto responseHeader = market_data::MessageHeader{buffer.data()};
-        REQUIRE_EQ(responseHeader.get<"schemaId">().value(), market_data::RequestComplete::sbeSchemaId());
-        auto decodedResponse = market_data::RequestComplete{buffer, responseHeader.sbeEncodedLength(),
+        auto responseHeader = turbofw::schema::market_data::MessageHeader{buffer.data()};
+        REQUIRE_EQ(
+            responseHeader.get<"schemaId">().value(), turbofw::schema::market_data::RequestComplete::sbeSchemaId());
+        auto decodedResponse = turbofw::schema::market_data::RequestComplete{buffer, responseHeader.sbeEncodedLength(),
             responseHeader.get<"blockLength">().value(), responseHeader.get<"version">().value()};
         REQUIRE_EQ(decodedResponse.get<"appId">().value(), 17);
         REQUIRE_EQ(decodedResponse.get<"requestId">().value(), 3);
-        REQUIRE(decodedResponse.get<"status">().value() == market_data::RequestStatus::Ok);
+        REQUIRE(decodedResponse.get<"status">().value() == turbofw::schema::market_data::RequestStatus::Ok);
         REQUIRE_EQ(decodedResponse.get<"count">().value(), 4);
     }
 }

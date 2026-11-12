@@ -6,7 +6,7 @@
      templateIds of the other schemas. -->
 <sbe:messageSchema xmlns:sbe="http://fixprotocol.io/2016/sbe"
                    xmlns:xi="http://www.w3.org/2001/XInclude"
-                   package="service" id="4" version="0" semanticVersion="0.1"
+                   package="turbofw.schema.service" id="4" version="0" semanticVersion="0.1"
                    byteOrder="littleEndian" description="Service">
 
   <!-- messageHeader, ServiceIdNULL, ClientId, Timestamp -->

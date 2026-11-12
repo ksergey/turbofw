@@ -32,19 +32,20 @@ struct TestConsumer : public testing::Consumer, public mixin::ReceiveMixin {
 };
 
 /// Decodes the flag set of the Heartbeat carried by a queue buffer
-auto decodeHeartbeat(std::span<std::byte const> buffer) -> service::ServiceFlags {
-    auto const header = service::MessageHeader{const_cast<std::byte*>(buffer.data())};
-    auto msg = service::Heartbeat{std::span<std::byte>{const_cast<std::byte*>(buffer.data()), buffer.size()},
-        header.sbeEncodedLength(), header.get<"blockLength">().value(), header.get<"version">().value()};
+auto decodeHeartbeat(std::span<std::byte const> buffer) -> turbofw::schema::service::ServiceFlags {
+    auto const header = turbofw::schema::service::MessageHeader{const_cast<std::byte*>(buffer.data())};
+    auto msg =
+        turbofw::schema::service::Heartbeat{std::span<std::byte>{const_cast<std::byte*>(buffer.data()), buffer.size()},
+            header.sbeEncodedLength(), header.get<"blockLength">().value(), header.get<"version">().value()};
     return msg.get<"flags">().value();
 }
 
 /// Drains the queue and returns the flag sets of the Heartbeat messages in it (other message types are discarded)
-auto drainedHeartbeatFlags(TestConsumer& consumer) -> std::vector<service::ServiceFlags> {
-    std::vector<service::ServiceFlags> result;
+auto drainedHeartbeatFlags(TestConsumer& consumer) -> std::vector<turbofw::schema::service::ServiceFlags> {
+    std::vector<turbofw::schema::service::ServiceFlags> result;
     consumer.receive([&](std::span<std::byte const> buffer) {
-        auto const header = service::MessageHeader{const_cast<std::byte*>(buffer.data())};
-        if (header.get<"templateId">().value() == service::Heartbeat::sbeTemplateId()) {
+        auto const header = turbofw::schema::service::MessageHeader{const_cast<std::byte*>(buffer.data())};
+        if (header.get<"templateId">().value() == turbofw::schema::service::Heartbeat::sbeTemplateId()) {
             result.push_back(decodeHeartbeat(buffer));
         }
     });
@@ -104,9 +105,10 @@ TEST_SUITE("SBEKeepAliveMixin") {
         std::this_thread::sleep_for(std::chrono::milliseconds{2}); // the interval elapses in silence
 
         // a message through the same producer counts as activity and restarts the silence timer
-        auto const sent = producer.send<service::SetLogLevel>([](service::SetLogLevel msg) {
-            msg.get<"level">().value(service::LogLevel::Info);
-        });
+        auto const sent =
+            producer.send<turbofw::schema::service::SetLogLevel>([](turbofw::schema::service::SetLogLevel msg) {
+                msg.get<"level">().value(turbofw::schema::service::LogLevel::Info);
+            });
         REQUIRE(sent);
         producer.keepAlive();
         CHECK_EQ(drainedHeartbeatFlags(consumer).size(), 0);
@@ -183,9 +185,10 @@ TEST_SUITE("SBEKeepAliveMixin") {
         CHECK_EQ(drainedHeartbeatFlags(consumer).size(), 0);
 
         // any publication re-arms with the current interval: the next silence beat comes 1ms later
-        auto const sent = producer.send<service::SetLogLevel>([](service::SetLogLevel msg) {
-            msg.get<"level">().value(service::LogLevel::Info);
-        });
+        auto const sent =
+            producer.send<turbofw::schema::service::SetLogLevel>([](turbofw::schema::service::SetLogLevel msg) {
+                msg.get<"level">().value(turbofw::schema::service::LogLevel::Info);
+            });
         REQUIRE(sent);
         std::this_thread::sleep_for(std::chrono::milliseconds{2});
         producer.keepAlive();

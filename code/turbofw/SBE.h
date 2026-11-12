@@ -68,10 +68,10 @@ struct FieldNamed {
 
 } // namespace detail
 
-/// The field ref of the generated SBE message M named N: `SBEFieldOf<service::Heartbeat, "serviceId">` is
-/// `service::Heartbeat::ServiceIdRef`. The search runs over `M::Fields` in schema order; the name argument is a
-/// `turbofw::CtString` string literal. An unknown name is a hard compile error -- use `SBEHasField` for the
-/// soft check.
+/// The field ref of the generated SBE message M named N: `SBEFieldOf<turbofw::schema::service::Heartbeat, "serviceId">`
+/// is `turbofw::schema::service::Heartbeat::ServiceIdRef`. The search runs over `M::Fields` in schema order; the name
+/// argument is a `turbofw::CtString` string literal. An unknown name is a hard compile error -- use `SBEHasField` for
+/// the soft check.
 template <typename M, CtString N>
 using SBEFieldOf = typename mp::At<detail::MessageFields<M>,
     typename mp::FindIf<detail::MessageFields<M>, detail::FieldNamed<N>::template fn>::type>::type;

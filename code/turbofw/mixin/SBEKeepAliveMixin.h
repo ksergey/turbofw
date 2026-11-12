@@ -15,18 +15,18 @@
 
 namespace turbofw::mixin {
 
-/// A self-check that `Self` can publish `service::Heartbeat`: a producer composed with \ref SBESendMixin.
-/// `SBEKeepAliveMixin` methods mention the constraint in their docs; a producer without the send mixin fails to compile
-/// here, not inside.
+/// A self-check that `Self` can publish `turbofw::schema::service::Heartbeat`: a producer composed with \ref
+/// SBESendMixin. `SBEKeepAliveMixin` methods mention the constraint in their docs; a producer without the send mixin
+/// fails to compile here, not inside.
 template <typename Self>
 concept HeartbeatSender = turboq::Producer<Self> && requires(Self self) {
-    self.template send<service::Heartbeat>([](service::Heartbeat msg) {
+    self.template send<turbofw::schema::service::Heartbeat>([](turbofw::schema::service::Heartbeat msg) {
         msg.get<"ts">().value(0);
     });
 };
 
-/// Publishes `service::Heartbeat` on a producer so a consumer never sees the service go silent on the wire. Composes
-/// with \ref SBESendMixin; a producer without it fails to compile in the \ref HeartbeatSender concept.
+/// Publishes `turbofw::schema::service::Heartbeat` on a producer so a consumer never sees the service go silent on the
+/// wire. Composes with \ref SBESendMixin; a producer without it fails to compile in the \ref HeartbeatSender concept.
 ///
 /// `startHeartbeating` publishes a Start heartbeat and enables periodic publication; `stopHeartbeating` publishes
 /// a Stop heartbeat and disables it; `keepAlive` publishes a heartbeat once the silence interval has elapsed. Every
@@ -41,7 +41,7 @@ concept HeartbeatSender = turboq::Producer<Self> && requires(Self self) {
 /// without zeroing). `serviceId` is not written. Single-threaded; no clock reads while heartbeating is disabled.
 class SBEKeepAliveMixin {
 private:
-    using ServiceFlags = service::ServiceFlags;
+    using ServiceFlags = turbofw::schema::service::ServiceFlags;
 
     std::chrono::nanoseconds interval_{std::chrono::seconds{1}};
     std::uint64_t nextHearbeatSendTime_{0};
@@ -111,7 +111,7 @@ private:
     template <typename Self>
         requires HeartbeatSender<std::remove_cvref_t<Self>>
     auto sendHeartbeat(this Self&& self, ServiceFlags flags, std::uint64_t timestamp = realtimeNanos()) -> void {
-        (void)self.template send<service::Heartbeat>([&](service::Heartbeat msg) {
+        (void)self.template send<turbofw::schema::service::Heartbeat>([&](turbofw::schema::service::Heartbeat msg) {
             msg.get<"flags">().value(flags);
             msg.get<"ts">().value(timestamp);
         });

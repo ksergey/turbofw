@@ -38,8 +38,8 @@ Every microservice owns exactly two queues:
 | Trading connector | `trading`, `service` | `CreateContext`, `NewOrder`, `ReplaceOrder`, `CancelOrder`, `CancelAll`, `OrderStatusRequest` | `ContextResult`, `ExecutionReport`, `CommandReject`, `RequestComplete` |
 | Metadata | `metadata`, `service` | `RegisterService`, `RegisterInstrument`, `ServiceRequest`, `InstrumentRequest` | `RegisterServiceResult`, `RegisterInstrumentResult`, `ServiceDefinition`, `InstrumentDefinition`, `RequestComplete` |
 
-Every service additionally receives `service::SetLogLevel` on its `MPSC` queue and publishes `service::Heartbeat` and
-`service::SetLogLevelResult` on its `Multicast` queue. The schema files are the source of truth for message contents;
+Every service additionally receives `turbofw::schema::service::SetLogLevel` on its `MPSC` queue and publishes `turbofw::schema::service::Heartbeat` and
+`turbofw::schema::service::SetLogLevelResult` on its `Multicast` queue. The schema files are the source of truth for message contents;
 don't duplicate them here.
 
 ### Request / response conventions
@@ -53,7 +53,7 @@ don't duplicate them here.
 
 ### Service lifecycle
 
-- Every service publishes `service::Heartbeat` on events (start, stop, state change) and periodically while it has
+- Every service publishes `turbofw::schema::service::Heartbeat` on events (start, stop, state change) and periodically while it has
   published nothing else for a while. Flags: `Start` and `Stop` are events; `NotConnected` and `Recovering` are
   states repeated while they hold.
 - The `Start` heartbeat means the service restarted and everything a client derived from the previous instance
@@ -84,7 +84,7 @@ don't duplicate them here.
 ### Rules
 
 - Services depend on each other only through queues and schemas. Don't link one service's internals into another.
-- Every service must publish `service::Heartbeat` and handle `SetLogLevel`.
+- Every service must publish `turbofw::schema::service::Heartbeat` and handle `SetLogLevel`.
 - A new service type means: its two queues, its own schema (or an existing one) plus `service`, and a row in the table
   above.
 
@@ -95,10 +95,10 @@ don't duplicate them here.
 | `code/turbofw/*.{h,cpp}` | Core library `turbofw::turbofw` |
 | `code/turbofw/*_test.cpp` | doctest unit tests, one executable per file (auto-discovered) |
 | `code/turbofw/*_bm.cpp` | google-benchmark benchmarks, one executable per file (auto-discovered) |
-| `schemas/market_data_schema.xml` | SBE market data schema (package `market_data`, schemaId 1) → `<turbofw/schema/market_data/schema.h>`, namespace `market_data` |
-| `schemas/metadata_schema.xml` | SBE metadata schema (package `metadata`, schemaId 2) → `<turbofw/schema/metadata/schema.h>`, namespace `metadata` |
-| `schemas/trading_schema.xml` | SBE trading schema (package `trading`, schemaId 3) → `<turbofw/schema/trading/schema.h>`, namespace `trading` |
-| `schemas/service_schema.xml` | SBE service schema (package `service`, schemaId 4) → `<turbofw/schema/service/schema.h>`, namespace `service` |
+| `schemas/market_data_schema.xml` | SBE market data schema (package `turbofw.schema.market_data`, schemaId 1) → `<turbofw/schema/market_data/schema.h>`, namespace `turbofw::schema::market_data` |
+| `schemas/metadata_schema.xml` | SBE metadata schema (package `turbofw.schema.metadata`, schemaId 2) → `<turbofw/schema/metadata/schema.h>`, namespace `turbofw::schema::metadata` |
+| `schemas/trading_schema.xml` | SBE trading schema (package `turbofw.schema.trading`, schemaId 3) → `<turbofw/schema/trading/schema.h>`, namespace `turbofw::schema::trading` |
+| `schemas/service_schema.xml` | SBE service schema (package `turbofw.schema.service`, schemaId 4) → `<turbofw/schema/service/schema.h>`, namespace `turbofw::schema::service` |
 | `schemas/common_types.xml` | Shared types, XIncluded into every schema |
 | `cmake/` | `GetCPM.cmake` (dependency bootstrap); test/bench discovery comes from turboq's `TurboQHelpers.cmake` (available after adding turboq) |
 | `.github/workflows/build-and-test.yml` | CI: compiler matrix, sanitizers |
@@ -195,12 +195,12 @@ C-style constructs:
   message header. A new protocol gets a new schema file and schemaId and is added to the `foreach` in
   `code/CMakeLists.txt`.
 - Shared types live in `schemas/common_types.xml`; each schema gets its own copy of them in its own namespace, so
-  `market_data::Side` and `trading::OrderSide` are distinct C++ types with identical encoding.
+  `turbofw::schema::market_data::Side` and `turbofw::schema::trading::OrderSide` are distinct C++ types with identical encoding.
 - Order fields by size (8, 4, 2, 1 bytes) to keep them naturally aligned.
 - Prices are the composites `Price9` / `Price9NULL` (`common_types.xml`): an int64 `mantissa` and a constant `int8`
   `exponent` of -9 that is not encoded, so the wire size is 8 bytes. There is no per-instrument exponent; a
   different precision means a new composite (`Price6`, ...), not a field. Access it as
-  `msg.get<"price">().get<"mantissa">()`. `metadata::InstrumentAttributes` carries `tickSize`, `lotSize` and
+  `msg.get<"price">().get<"mantissa">()`. `turbofw::schema::metadata::InstrumentAttributes` carries `tickSize`, `lotSize` and
   `multiplier` in the same encodings.
 - `Qty` is a plain int64 count of units (no exponent). If fractional quantities are needed, add a composite such as
   `DecimalQty4` instead of changing `Qty`.

@@ -31,20 +31,20 @@ struct Overloaded : Fns... {
 template <typename... Fns>
 Overloaded(Fns...) -> Overloaded<Fns...>;
 
-/// Encode a service::Heartbeat with fixed fields into a buffer
+/// Encode a turbofw::schema::service::Heartbeat with fixed fields into a buffer
 auto encodeHeartbeat(std::span<std::byte> buffer) -> void {
-    auto msg = service::Heartbeat::wrapAndApplyHeader(buffer);
+    auto msg = turbofw::schema::service::Heartbeat::wrapAndApplyHeader(buffer);
     msg.get<"ts">().value(222);
     msg.get<"serviceId">().value(1);
-    msg.get<"flags">().value(service::ServiceFlags{}.start(true));
+    msg.get<"flags">().value(turbofw::schema::service::ServiceFlags{}.start(true));
 }
 
-/// Encode an market_data::Snapshot with two bid levels into a buffer
+/// Encode an turbofw::schema::market_data::Snapshot with two bid levels into a buffer
 auto encodeSnapshot(std::span<std::byte> buffer) -> void {
-    auto msg = market_data::Snapshot::wrapAndApplyHeader(buffer);
+    auto msg = turbofw::schema::market_data::Snapshot::wrapAndApplyHeader(buffer);
     auto header = msg.get<"header">();
     header.get<"instrumentId">().value(42);
-    header.get<"flags">().value(market_data::MdFlags{}.snapshot(true).mandatory(true));
+    header.get<"flags">().value(turbofw::schema::market_data::MdFlags{}.snapshot(true).mandatory(true));
     msg.get<"appId">().value(17);
     msg.get<"requestId">().value(3);
 
@@ -58,9 +58,9 @@ auto encodeSnapshot(std::span<std::byte> buffer) -> void {
     }
 }
 
-/// Encode a trading::CreateContext with var-size data fields into a buffer
+/// Encode a turbofw::schema::trading::CreateContext with var-size data fields into a buffer
 auto encodeCreateContext(std::span<std::byte> buffer) -> void {
-    auto msg = trading::CreateContext::wrapAndApplyHeader(buffer);
+    auto msg = turbofw::schema::trading::CreateContext::wrapAndApplyHeader(buffer);
     msg.get<"appId">().value(17);
     msg.get<"requestId">().value(3);
     msg.get<"instrumentId">().value(42);
@@ -68,10 +68,10 @@ auto encodeCreateContext(std::span<std::byte> buffer) -> void {
     msg.get<"account">().value("SPOT-ACC");
 }
 
-/// Encode a service::SetLogLevel into a buffer (an "unknown" message for most decode tests)
+/// Encode a turbofw::schema::service::SetLogLevel into a buffer (an "unknown" message for most decode tests)
 auto encodeSetLogLevel(std::span<std::byte> buffer) -> void {
-    auto msg = service::SetLogLevel::wrapAndApplyHeader(buffer);
-    msg.get<"level">().value(service::LogLevel::Error);
+    auto msg = turbofw::schema::service::SetLogLevel::wrapAndApplyHeader(buffer);
+    msg.get<"level">().value(turbofw::schema::service::LogLevel::Error);
 }
 
 } // namespace
@@ -89,7 +89,7 @@ TEST_SUITE("SBE") {
         auto contextCalls = 0;
         auto heartbeatCalls = 0;
         auto const fn = Overloaded{
-            [&](market_data::Snapshot msg) {
+            [&](turbofw::schema::market_data::Snapshot msg) {
                 ++snapshotCalls;
                 CHECK_EQ(msg.get<"header">().get<"instrumentId">().value(), 42u);
                 auto decodedFlags = msg.get<"header">().get<"flags">().value();
@@ -100,20 +100,21 @@ TEST_SUITE("SBE") {
                 CHECK_EQ(bids.next().get<"price">().get<"mantissa">().value(), 100);
                 CHECK_EQ(bids.next().get<"price">().get<"mantissa">().value(), 99);
             },
-            [&](trading::CreateContext msg) {
+            [&](turbofw::schema::trading::CreateContext msg) {
                 ++contextCalls;
                 CHECK_EQ(msg.get<"appId">().value(), 17u);
                 CHECK_EQ(msg.get<"instrumentId">().value(), 42u);
                 CHECK_EQ(msg.get<"clientCode">().value(), std::string_view{"ALPHA"});
                 CHECK_EQ(msg.get<"account">().value(), std::string_view{"SPOT-ACC"});
             },
-            [&](service::Heartbeat msg) {
+            [&](turbofw::schema::service::Heartbeat msg) {
                 ++heartbeatCalls;
                 CHECK_EQ(msg.get<"serviceId">().value(), 1u);
                 CHECK_EQ(msg.get<"ts">().value(), 222);
             },
         };
-        using Messages = mp::List<market_data::Snapshot, trading::CreateContext, service::Heartbeat>;
+        using Messages = mp::List<turbofw::schema::market_data::Snapshot, turbofw::schema::trading::CreateContext,
+            turbofw::schema::service::Heartbeat>;
 
         CHECK(turbofw::tryDecodeSBE<Messages>(snapshotBuffer, fn));
         CHECK(turbofw::tryDecodeSBE<Messages>(ctxBuffer, fn));
@@ -128,11 +129,12 @@ TEST_SUITE("SBE") {
         encodeSnapshot(buffer);
 
         auto calls = 0;
-        auto const result =
-            turbofw::tryDecodeSBE<mp::List<market_data::Snapshot, trading::CreateContext>>(buffer, [&](auto msg) {
+        auto const result = turbofw::tryDecodeSBE<
+            mp::List<turbofw::schema::market_data::Snapshot, turbofw::schema::trading::CreateContext>>(
+            buffer, [&](auto msg) {
                 // `if constexpr` instead of a static_assert: the invocable check instantiates both branches,
                 // a static_assert would fail for the CreateContext branch even if it never runs
-                if constexpr (std::is_same_v<decltype(msg), market_data::Snapshot>) {
+                if constexpr (std::is_same_v<decltype(msg), turbofw::schema::market_data::Snapshot>) {
                     ++calls;
                     CHECK_EQ(msg.template get<"header">().template get<"instrumentId">().value(), 42u);
                 } else {
@@ -152,8 +154,8 @@ TEST_SUITE("SBE") {
         auto const callback = [&calls](auto&&...) {
             ++calls;
         };
-        auto const result =
-            turbofw::tryDecodeSBE<mp::List<service::Heartbeat, market_data::Snapshot>>(buffer, callback);
+        auto const result = turbofw::tryDecodeSBE<
+            mp::List<turbofw::schema::service::Heartbeat, turbofw::schema::market_data::Snapshot>>(buffer, callback);
         REQUIRE_FALSE(result);
         CHECK_EQ(calls, 0);
     }
@@ -161,15 +163,17 @@ TEST_SUITE("SBE") {
     TEST_CASE("short buffer and garbage: not a match, without reading past the end") {
         // an all-zero buffer decodes a header with (schemaId=0, templateId=0): no generated message has id 0
         // (asserted right below), so it can never match the list
-        static_assert(service::Heartbeat::sbeSchemaId() != 0 && service::Heartbeat::sbeTemplateId() != 0);
-        static_assert(trading::CreateContext::sbeSchemaId() != 0 && trading::CreateContext::sbeTemplateId() != 0);
+        static_assert(turbofw::schema::service::Heartbeat::sbeSchemaId() != 0 &&
+                      turbofw::schema::service::Heartbeat::sbeTemplateId() != 0);
+        static_assert(turbofw::schema::trading::CreateContext::sbeSchemaId() != 0 &&
+                      turbofw::schema::trading::CreateContext::sbeTemplateId() != 0);
 
         auto buffer = std::array<std::byte, kBufferSize>{};
         auto calls = 0;
         auto const callback = [&calls](auto&&...) {
             ++calls;
         };
-        using Messages = mp::List<service::Heartbeat, trading::CreateContext>;
+        using Messages = mp::List<turbofw::schema::service::Heartbeat, turbofw::schema::trading::CreateContext>;
 
         // a buffer shorter than a MessageHeader is not an SBE message at all
         CHECK_FALSE(turbofw::tryDecodeSBE<Messages>(std::span<std::byte const>{buffer.data(), 4}, callback));
@@ -184,13 +188,13 @@ TEST_SUITE("SBE") {
         encodeHeartbeat(buffer);
 
         // the header stays readable but the body is cut one byte short of the block length
-        auto constexpr kBlockSize = 8 + service::Heartbeat::sbeBlockLength() - 1;
+        auto constexpr kBlockSize = 8 + turbofw::schema::service::Heartbeat::sbeBlockLength() - 1;
         auto const truncated = std::span<std::byte const>{buffer.data(), kBlockSize};
         auto calls = 0;
-        auto const impaired = [&calls](service::Heartbeat) {
+        auto const impaired = [&calls](turbofw::schema::service::Heartbeat) {
             ++calls;
         };
-        CHECK_THROWS((void)turbofw::tryDecodeSBE<mp::List<service::Heartbeat>>(truncated, impaired));
+        CHECK_THROWS((void)turbofw::tryDecodeSBE<mp::List<turbofw::schema::service::Heartbeat>>(truncated, impaired));
         CHECK_EQ(calls, 0);
     }
 
@@ -200,18 +204,19 @@ TEST_SUITE("SBE") {
         encodeHeartbeat(hbBuffer);
         encodeSetLogLevel(foreignBuffer); // (schemaId, templateId) not represented in the list below
 
-        using Messages = mp::List<market_data::Snapshot, trading::CreateContext, service::Heartbeat>;
+        using Messages = mp::List<turbofw::schema::market_data::Snapshot, turbofw::schema::trading::CreateContext,
+            turbofw::schema::service::Heartbeat>;
         using Header = turbofw::SBEMessageHeader<Messages>; // one shared header type for the whole list
 
         auto heartbeatCalls = 0;
         auto const fn = Overloaded{
-            [&](market_data::Snapshot) {
+            [&](turbofw::schema::market_data::Snapshot) {
                 FAIL("dispatch must pick the type matching the header, not another list entry");
             },
-            [&](trading::CreateContext) {
+            [&](turbofw::schema::trading::CreateContext) {
                 FAIL("dispatch must pick the type matching the header, not another list entry");
             },
-            [&](service::Heartbeat msg) {
+            [&](turbofw::schema::service::Heartbeat msg) {
                 ++heartbeatCalls;
                 CHECK_EQ(msg.get<"ts">().value(), 222);
             },
@@ -240,14 +245,15 @@ TEST_SUITE("SBE") {
         auto const pristine = buffer;
 
         auto calls = 0;
-        CHECK(turbofw::tryDecodeSBE<mp::List<market_data::Snapshot>>(buffer, [&](market_data::Snapshot msg) {
-            ++calls;
-            CHECK_EQ(msg.get<"header">().get<"instrumentId">().value(), 42u);
-            auto bids = msg.get<"bids">();
-            CHECK_EQ(bids.count(), 2);
-            bids.next();
-            bids.next();
-        }));
+        CHECK(turbofw::tryDecodeSBE<mp::List<turbofw::schema::market_data::Snapshot>>(
+            buffer, [&](turbofw::schema::market_data::Snapshot msg) {
+                ++calls;
+                CHECK_EQ(msg.get<"header">().get<"instrumentId">().value(), 42u);
+                auto bids = msg.get<"bids">();
+                CHECK_EQ(bids.count(), 2);
+                bids.next();
+                bids.next();
+            }));
         REQUIRE_EQ(calls, 1);
         // byte-identical after a full decode: decode is a pure view over the caller's buffer
         CHECK(std::equal(buffer.begin(), buffer.end(), pristine.begin(), pristine.end()));
@@ -257,27 +263,30 @@ TEST_SUITE("SBE") {
 TEST_SUITE("SBE field type") {
     TEST_CASE("field value type matches the wire type behind the schema field") {
         // plain scalar
+        static_assert(std::is_same_v<turbofw::SBEFieldOf<turbofw::schema::service::Heartbeat, "serviceId">,
+            turbofw::schema::service::Heartbeat::ServiceIdRef>);
         static_assert(
-            std::is_same_v<turbofw::SBEFieldOf<service::Heartbeat, "serviceId">, service::Heartbeat::ServiceIdRef>);
-        static_assert(std::is_same_v<turbofw::SBEFieldValueOf<service::Heartbeat, "serviceId">, std::uint16_t>);
+            std::is_same_v<turbofw::SBEFieldValueOf<turbofw::schema::service::Heartbeat, "serviceId">, std::uint16_t>);
 
         // optional composite: the composite class itself, as types.h re-exports it
-        static_assert(
-            std::is_same_v<turbofw::SBEFieldValueOf<market_data::MbpUpdate, "price">, market_data::Price9NULL>);
+        static_assert(std::is_same_v<turbofw::SBEFieldValueOf<turbofw::schema::market_data::MbpUpdate, "price">,
+            turbofw::schema::market_data::Price9NULL>);
 
         // enum and set fields: the enum/set class
-        static_assert(std::is_same_v<turbofw::SBEFieldValueOf<trading::NewOrder, "side">, trading::OrderSide>);
-        static_assert(std::is_same_v<turbofw::SBEFieldValueOf<trading::NewOrder, "flags">, trading::OrderFlags>);
+        static_assert(std::is_same_v<turbofw::SBEFieldValueOf<turbofw::schema::trading::NewOrder, "side">,
+            turbofw::schema::trading::OrderSide>);
+        static_assert(std::is_same_v<turbofw::SBEFieldValueOf<turbofw::schema::trading::NewOrder, "flags">,
+            turbofw::schema::trading::OrderFlags>);
 
         CHECK(true);
     }
 
     TEST_CASE("SBEHasField: ordinary fields are, groups and unknown names are not") {
-        static_assert(turbofw::SBEHasField<service::Heartbeat, "serviceId">);
-        static_assert(turbofw::SBEHasField<market_data::MbpUpdate, "price">);
+        static_assert(turbofw::SBEHasField<turbofw::schema::service::Heartbeat, "serviceId">);
+        static_assert(turbofw::SBEHasField<turbofw::schema::market_data::MbpUpdate, "price">);
         // MbpUpdate.bids is a repeating group ref: named, but valueless
-        static_assert(!turbofw::SBEHasField<market_data::MbpUpdate, "bids">);
-        static_assert(!turbofw::SBEHasField<market_data::MbpUpdate, "noSuchField">);
+        static_assert(!turbofw::SBEHasField<turbofw::schema::market_data::MbpUpdate, "bids">);
+        static_assert(!turbofw::SBEHasField<turbofw::schema::market_data::MbpUpdate, "noSuchField">);
         static_assert(!turbofw::SBEHasField<int, "anything">);
 
         CHECK(true);
@@ -285,37 +294,39 @@ TEST_SUITE("SBE field type") {
 
     TEST_CASE("field null value matches the schema null of nullable fields") {
         // optional plain scalar: the raw sentinel the decoder compares against
-        static_assert(turbofw::SBEFieldNullValueOf<market_data::MbpUpdate, "orders"> ==
+        static_assert(turbofw::SBEFieldNullValueOf<turbofw::schema::market_data::MbpUpdate, "orders"> ==
                       std::numeric_limits<std::uint32_t>::max());
-        static_assert(
-            std::is_same_v<std::remove_cv_t<decltype(turbofw::SBEFieldNullValueOf<market_data::MbpUpdate, "orders">)>,
-                std::uint32_t>);
-        static_assert(
-            turbofw::SBEFieldNullValueOf<service::Heartbeat, "serviceId"> == std::numeric_limits<std::uint16_t>::max());
+        static_assert(std::is_same_v<
+            std::remove_cv_t<decltype(turbofw::SBEFieldNullValueOf<turbofw::schema::market_data::MbpUpdate, "orders">)>,
+            std::uint32_t>);
+        static_assert(turbofw::SBEFieldNullValueOf<turbofw::schema::service::Heartbeat, "serviceId"> ==
+                      std::numeric_limits<std::uint16_t>::max());
 
         // optional enum: the enum class SBE_NULL constant
-        static_assert(turbofw::SBEFieldNullValueOf<market_data::Trade, "aggressor"> == market_data::Side::SBE_NULL);
-        static_assert(
-            std::is_same_v<std::remove_cv_t<decltype(turbofw::SBEFieldNullValueOf<market_data::Trade, "aggressor">)>,
-                market_data::Side>);
+        static_assert(turbofw::SBEFieldNullValueOf<turbofw::schema::market_data::Trade, "aggressor"> ==
+                      turbofw::schema::market_data::Side::SBE_NULL);
+        static_assert(std::is_same_v<
+            std::remove_cv_t<decltype(turbofw::SBEFieldNullValueOf<turbofw::schema::market_data::Trade, "aggressor">)>,
+            turbofw::schema::market_data::Side>);
 
         // optional composite: a default constructed composite class
-        static_assert(
-            std::is_same_v<std::remove_cv_t<decltype(turbofw::SBEFieldNullValueOf<market_data::MbpUpdate, "price">)>,
-                market_data::Price9NULL>);
+        static_assert(std::is_same_v<
+            std::remove_cv_t<decltype(turbofw::SBEFieldNullValueOf<turbofw::schema::market_data::MbpUpdate, "price">)>,
+            turbofw::schema::market_data::Price9NULL>);
 
         CHECK(true);
     }
 
     TEST_CASE("SBEHasFieldNull: nullable fields are, required ones and groups are not") {
-        static_assert(turbofw::SBEHasFieldNull<market_data::MbpUpdate, "price">);
-        static_assert(turbofw::SBEHasFieldNull<market_data::Trade, "aggressor">);
-        static_assert(turbofw::SBEHasFieldNull<service::Heartbeat, "serviceId">);
-        static_assert(turbofw::SBEHasFieldNull<trading::NewOrder, "requestId">); // optional since the requestId rework
+        static_assert(turbofw::SBEHasFieldNull<turbofw::schema::market_data::MbpUpdate, "price">);
+        static_assert(turbofw::SBEHasFieldNull<turbofw::schema::market_data::Trade, "aggressor">);
+        static_assert(turbofw::SBEHasFieldNull<turbofw::schema::service::Heartbeat, "serviceId">);
+        static_assert(turbofw::SBEHasFieldNull<turbofw::schema::trading::NewOrder,
+            "requestId">); // optional since the requestId rework
         // required fields and repeating groups carry no NullValue
-        static_assert(!turbofw::SBEHasFieldNull<market_data::Trade, "price">);
-        static_assert(!turbofw::SBEHasFieldNull<trading::NewOrder, "quantity">);
-        static_assert(!turbofw::SBEHasFieldNull<market_data::MbpUpdate, "bids">);
+        static_assert(!turbofw::SBEHasFieldNull<turbofw::schema::market_data::Trade, "price">);
+        static_assert(!turbofw::SBEHasFieldNull<turbofw::schema::trading::NewOrder, "quantity">);
+        static_assert(!turbofw::SBEHasFieldNull<turbofw::schema::market_data::MbpUpdate, "bids">);
         static_assert(!turbofw::SBEHasFieldNull<int, "anything">);
 
         CHECK(true);

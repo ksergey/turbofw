@@ -26,12 +26,12 @@ using StrongTypeFor = std::conditional_t<SBEHasFieldNull<M, N>,
 } // namespace detail
 
 /// The id of a service, assigned by Metadata (never reused); `0xFFFF` is reserved for null
-using ServiceId = detail::StrongTypeFor<service::Heartbeat, "serviceId">;
+using ServiceId = detail::StrongTypeFor<turbofw::schema::service::Heartbeat, "serviceId">;
 
 /// The id of a client application, chosen randomly by the client; `0xFFFFFFFF` is reserved for null
-using AppId = detail::StrongTypeFor<service::SetLogLevel, "appId">;
+using AppId = detail::StrongTypeFor<turbofw::schema::service::SetLogLevel, "appId">;
 
 /// The id of a client request, chosen by the client; `null` means unsolicited/spontaneous, `0` is a valid id
-using RequestId = detail::StrongTypeFor<service::SetLogLevel, "requestId">;
+using RequestId = detail::StrongTypeFor<turbofw::schema::service::SetLogLevel, "requestId">;
 
 } // namespace turbofw

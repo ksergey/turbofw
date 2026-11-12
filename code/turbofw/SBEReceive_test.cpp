@@ -53,7 +53,7 @@ struct TestSBEProducer : public testing::Producer, public mixin::SBESendMixin {
 };
 
 /// Consumer composed with the hook mixins; the receive mixin itself is not a hook, so it is not in `Mixins`
-using Filter = TemplateFilterMixin<service::Heartbeat::sbeTemplateId()>;
+using Filter = TemplateFilterMixin<turbofw::schema::service::Heartbeat::sbeTemplateId()>;
 
 struct TaggedConsumer : public testing::Consumer,
                         public mixin::SBEReceiveMixin,
@@ -94,7 +94,7 @@ TEST_SUITE("SBEReceiveMixin") {
 
         // an empty queue: nothing received
         auto const [nothing, noHandles, noDrops] =
-            consumer.receive<mp::List<service::Heartbeat>>([](service::Heartbeat) {
+            consumer.receive<mp::List<turbofw::schema::service::Heartbeat>>([](turbofw::schema::service::Heartbeat) {
                 FAIL("empty queue must not run");
             });
         CHECK_EQ(nothing, 0);
@@ -102,17 +102,19 @@ TEST_SUITE("SBEReceiveMixin") {
         CHECK_EQ(noDrops, 0);
 
         // a message of the same schema the list does not expect: received, but neither handled nor dropped
-        auto const foreign = producer.send<service::SetLogLevel>([](service::SetLogLevel msg) {
-            msg.get<"level">().value(service::LogLevel::Error);
-        });
+        auto const foreign =
+            producer.send<turbofw::schema::service::SetLogLevel>([](turbofw::schema::service::SetLogLevel msg) {
+                msg.get<"level">().value(turbofw::schema::service::LogLevel::Error);
+            });
         REQUIRE(foreign);
 
         // the expected message
-        auto const beat = producer.send<service::Heartbeat>([](service::Heartbeat msg) {
-            msg.get<"ts">().value(222);
-            msg.get<"serviceId">().value(1);
-            msg.get<"flags">().value(service::ServiceFlags{}.start(true));
-        });
+        auto const beat =
+            producer.send<turbofw::schema::service::Heartbeat>([](turbofw::schema::service::Heartbeat msg) {
+                msg.get<"ts">().value(222);
+                msg.get<"serviceId">().value(1);
+                msg.get<"flags">().value(turbofw::schema::service::ServiceFlags{}.start(true));
+            });
         REQUIRE(beat);
 
         // a buffer too short to carry even the MessageHeader: dropped
@@ -121,8 +123,8 @@ TEST_SUITE("SBEReceiveMixin") {
         producer.commit();
 
         auto calls = 0;
-        auto const [received, handled, dropped] =
-            consumer.receive<mp::List<service::Heartbeat>>([&calls](service::Heartbeat msg) {
+        auto const [received, handled, dropped] = consumer.receive<mp::List<turbofw::schema::service::Heartbeat>>(
+            [&calls](turbofw::schema::service::Heartbeat msg) {
                 ++calls;
                 CHECK_EQ(msg.get<"ts">().value(), 222);
                 auto flags = msg.get<"flags">().value();
@@ -136,15 +138,15 @@ TEST_SUITE("SBEReceiveMixin") {
         // hooks saw both real messages (the dropped one is too short to read a header at all): heartbeats from
         // the list AND the foreign SetLogLevel whose hook-side audit is the hook's own job
         REQUIRE_EQ(log.size(), 2);
-        CHECK_EQ(log[0], std::make_pair('a', service::SetLogLevel::sbeTemplateId()));
-        CHECK_EQ(log[1], std::make_pair('a', service::Heartbeat::sbeTemplateId()));
+        CHECK_EQ(log[0], std::make_pair('a', turbofw::schema::service::SetLogLevel::sbeTemplateId()));
+        CHECK_EQ(log[1], std::make_pair('a', turbofw::schema::service::Heartbeat::sbeTemplateId()));
 
         // the self-demultiplexing hook counted only the heartbeat, not the foreign message
         CHECK_EQ(consumer.Filter::count, 1);
 
         // the queue is drained
         auto const [empty, emptyHandled, emptyDropped] =
-            consumer.receive<mp::List<service::Heartbeat>>([](service::Heartbeat) {
+            consumer.receive<mp::List<turbofw::schema::service::Heartbeat>>([](turbofw::schema::service::Heartbeat) {
                 FAIL("the queue must be drained");
             });
         CHECK_EQ(empty, 0);
@@ -157,20 +159,22 @@ TEST_SUITE("SBEReceiveMixin") {
         auto producer = TestSBEProducer{&queue};
         auto consumer = PlainConsumer{&queue};
 
-        auto const foreign = producer.send<service::SetLogLevel>([](service::SetLogLevel msg) {
-            msg.get<"level">().value(service::LogLevel::Warn);
-        });
+        auto const foreign =
+            producer.send<turbofw::schema::service::SetLogLevel>([](turbofw::schema::service::SetLogLevel msg) {
+                msg.get<"level">().value(turbofw::schema::service::LogLevel::Warn);
+            });
         REQUIRE(foreign);
-        auto const beat = producer.send<service::Heartbeat>([](service::Heartbeat msg) {
-            msg.get<"ts">().value(7);
-            msg.get<"serviceId">().value(2);
-            msg.get<"flags">().value(service::ServiceFlags{});
-        });
+        auto const beat =
+            producer.send<turbofw::schema::service::Heartbeat>([](turbofw::schema::service::Heartbeat msg) {
+                msg.get<"ts">().value(7);
+                msg.get<"serviceId">().value(2);
+                msg.get<"flags">().value(turbofw::schema::service::ServiceFlags{});
+            });
         REQUIRE(beat);
 
         auto calls = 0;
         auto const [received, handled, dropped] =
-            consumer.receive<service::Heartbeat>([&calls](service::Heartbeat msg) {
+            consumer.receive<turbofw::schema::service::Heartbeat>([&calls](turbofw::schema::service::Heartbeat msg) {
                 ++calls;
                 CHECK_EQ(msg.get<"ts">().value(), 7);
             });
@@ -187,23 +191,24 @@ TEST_SUITE("SBEReceiveMixin") {
         auto log = std::vector<std::pair<char, std::uint16_t>>{};
         auto consumer = OrderedConsumer{&queue, &log};
 
-        auto const beat = producer.send<service::Heartbeat>([](service::Heartbeat msg) {
-            msg.get<"ts">().value(2);
-            msg.get<"serviceId">().value(1);
-            msg.get<"flags">().value(service::ServiceFlags{});
-        });
+        auto const beat =
+            producer.send<turbofw::schema::service::Heartbeat>([](turbofw::schema::service::Heartbeat msg) {
+                msg.get<"ts">().value(2);
+                msg.get<"serviceId">().value(1);
+                msg.get<"flags">().value(turbofw::schema::service::ServiceFlags{});
+            });
         REQUIRE(beat);
 
         auto const [received, handled, dropped] =
-            consumer.receive<mp::List<service::Heartbeat>>([](service::Heartbeat) {});
+            consumer.receive<mp::List<turbofw::schema::service::Heartbeat>>([](turbofw::schema::service::Heartbeat) {});
         CHECK_EQ(received, 1);
         CHECK_EQ(handled, 1);
         CHECK_EQ(dropped, 0);
 
         // both hooks fired for the same message, first 'a' then 'b': the `Mixins` list order
         REQUIRE_EQ(log.size(), 2);
-        CHECK_EQ(log[0], std::make_pair('a', service::Heartbeat::sbeTemplateId()));
-        CHECK_EQ(log[1], std::make_pair('b', service::Heartbeat::sbeTemplateId()));
+        CHECK_EQ(log[0], std::make_pair('a', turbofw::schema::service::Heartbeat::sbeTemplateId()));
+        CHECK_EQ(log[1], std::make_pair('b', turbofw::schema::service::Heartbeat::sbeTemplateId()));
     }
 }
 

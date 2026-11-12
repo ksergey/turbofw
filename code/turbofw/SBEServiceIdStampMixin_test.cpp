@@ -29,12 +29,13 @@ struct TestConsumer : public testing::Consumer, public mixin::ReceiveMixin {
     using testing::Consumer::Consumer;
 };
 
-/// Decodes the raw serviceId of a service::Heartbeat carried by a queue buffer (0xFFFF is the null sentinel)
+/// Decodes the raw serviceId of a turbofw::schema::service::Heartbeat carried by a queue buffer (0xFFFF is the null
+/// sentinel)
 auto decodedServiceId(std::span<std::byte const> buffer) -> std::uint16_t {
-    auto const header = service::MessageHeader{const_cast<std::byte*>(buffer.data())};
-    REQUIRE_EQ(header.get<"templateId">().value(), service::Heartbeat::sbeTemplateId());
+    auto const header = turbofw::schema::service::MessageHeader{const_cast<std::byte*>(buffer.data())};
+    REQUIRE_EQ(header.get<"templateId">().value(), turbofw::schema::service::Heartbeat::sbeTemplateId());
     auto const body = std::span<std::byte>{const_cast<std::byte*>(buffer.data()), buffer.size()};
-    auto msg = service::Heartbeat{
+    auto msg = turbofw::schema::service::Heartbeat{
         body, header.sbeEncodedLength(), header.get<"blockLength">().value(), header.get<"version">().value()};
     return msg.get<"serviceId">().value();
 }
@@ -59,9 +60,9 @@ TEST_SUITE("SBEServiceIdStampMixin") {
         auto producer = TestProducer{&queue};
         auto consumer = TestConsumer{&queue};
 
-        (void)producer.send<service::Heartbeat>([](service::Heartbeat msg) {
+        (void)producer.send<turbofw::schema::service::Heartbeat>([](turbofw::schema::service::Heartbeat msg) {
             msg.get<"ts">().value(1);
-            msg.get<"flags">().value(service::ServiceFlags{});
+            msg.get<"flags">().value(turbofw::schema::service::ServiceFlags{});
         });
 
         auto const serviceIds = drainedServiceIds(consumer);
@@ -77,14 +78,14 @@ TEST_SUITE("SBEServiceIdStampMixin") {
         producer.setServiceId(ServiceId{7});
         CHECK_EQ(producer.serviceId().value_of(), 7u);
 
-        (void)producer.send<service::Heartbeat>([](service::Heartbeat msg) {
+        (void)producer.send<turbofw::schema::service::Heartbeat>([](turbofw::schema::service::Heartbeat msg) {
             msg.get<"ts">().value(1);
-            msg.get<"flags">().value(service::ServiceFlags{});
+            msg.get<"flags">().value(turbofw::schema::service::ServiceFlags{});
         });
         producer.setServiceId(ServiceId{9});
-        (void)producer.send<service::Heartbeat>([](service::Heartbeat msg) {
+        (void)producer.send<turbofw::schema::service::Heartbeat>([](turbofw::schema::service::Heartbeat msg) {
             msg.get<"ts">().value(2);
-            msg.get<"flags">().value(service::ServiceFlags{});
+            msg.get<"flags">().value(turbofw::schema::service::ServiceFlags{});
         });
 
         auto const serviceIds = drainedServiceIds(consumer);
@@ -99,15 +100,16 @@ TEST_SUITE("SBEServiceIdStampMixin") {
         auto consumer = TestConsumer{&queue};
 
         producer.setServiceId(ServiceId{42});
-        (void)producer.send<market_data::SnapshotRequest>([](market_data::SnapshotRequest msg) {
-            msg.get<"depth">().value(10);
-        });
+        (void)producer.send<turbofw::schema::market_data::SnapshotRequest>(
+            [](turbofw::schema::market_data::SnapshotRequest msg) {
+                msg.get<"depth">().value(10);
+            });
 
         auto depths = std::vector<int>{};
         consumer.receive([&](std::span<std::byte const> buffer) {
-            auto const header = service::MessageHeader{const_cast<std::byte*>(buffer.data())};
+            auto const header = turbofw::schema::service::MessageHeader{const_cast<std::byte*>(buffer.data())};
             auto const body = std::span<std::byte>{const_cast<std::byte*>(buffer.data()), buffer.size()};
-            auto msg = market_data::SnapshotRequest{
+            auto msg = turbofw::schema::market_data::SnapshotRequest{
                 body, header.sbeEncodedLength(), header.get<"blockLength">().value(), header.get<"version">().value()};
             depths.push_back(msg.get<"depth">().value());
         });

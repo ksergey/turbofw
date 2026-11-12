@@ -43,8 +43,8 @@ public:
     auto processMessage(Header header, std::span<std::byte const> buffer) noexcept -> void {
         nextMessageDeadline_ = monotonicNanos() + interval_.count();
 
-        if (header.template get<"schemaId">().value() != service::Heartbeat::sbeSchemaId() ||
-            header.template get<"templateId">().value() != service::Heartbeat::sbeTemplateId()) {
+        if (header.template get<"schemaId">().value() != turbofw::schema::service::Heartbeat::sbeSchemaId() ||
+            header.template get<"templateId">().value() != turbofw::schema::service::Heartbeat::sbeTemplateId()) {
             return;
         }
         auto const blockLength = header.template get<"blockLength">().value();
@@ -52,7 +52,7 @@ public:
             return; // a truncated body: leave the latch cleared, the decode step reports it (fatally) instead
         }
         auto const mutableBuffer = std::span<std::byte>{const_cast<std::byte*>(buffer.data()), buffer.size()};
-        auto msg = service::Heartbeat{
+        auto msg = turbofw::schema::service::Heartbeat{
             mutableBuffer, Header::sbeEncodedLength(), blockLength, header.template get<"version">().value()};
         if (msg.get<"flags">().value().stop()) [[unlikely]] {
             nextMessageDeadline_ = 0;

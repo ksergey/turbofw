@@ -31,15 +31,17 @@ struct TestConsumer : public testing::Consumer, public mixin::ReceiveMixin {
 };
 
 auto decodedRequestId(std::span<std::byte const> buffer) -> std::uint64_t {
-    auto const header = service::MessageHeader{const_cast<std::byte*>(buffer.data())};
+    auto const header = turbofw::schema::service::MessageHeader{const_cast<std::byte*>(buffer.data())};
     auto const body = std::span<std::byte>{const_cast<std::byte*>(buffer.data()), buffer.size()};
     auto const blockLength = header.get<"blockLength">().value();
     auto const version = header.get<"version">().value();
     switch (header.get<"templateId">().value()) {
-    case service::SetLogLevel::sbeTemplateId():
-        return service::SetLogLevel{body, header.sbeEncodedLength(), blockLength, version}.get<"requestId">().value();
-    case market_data::SnapshotRequest::sbeTemplateId():
-        return market_data::SnapshotRequest{body, header.sbeEncodedLength(), blockLength, version}
+    case turbofw::schema::service::SetLogLevel::sbeTemplateId():
+        return turbofw::schema::service::SetLogLevel{body, header.sbeEncodedLength(), blockLength, version}
+            .get<"requestId">()
+            .value();
+    case turbofw::schema::market_data::SnapshotRequest::sbeTemplateId():
+        return turbofw::schema::market_data::SnapshotRequest{body, header.sbeEncodedLength(), blockLength, version}
             .get<"requestId">()
             .value();
     default: return 0;
@@ -63,11 +65,11 @@ TEST_SUITE("SBERequestIdStampMixin") {
         auto producer = TestProducer{&queue};
         auto consumer = TestConsumer{&queue};
 
-        (void)producer.send<service::SetLogLevel>([](service::SetLogLevel msg) {
-            msg.get<"level">().value(service::LogLevel::Info);
+        (void)producer.send<turbofw::schema::service::SetLogLevel>([](turbofw::schema::service::SetLogLevel msg) {
+            msg.get<"level">().value(turbofw::schema::service::LogLevel::Info);
         });
-        (void)producer.send<service::SetLogLevel>([](service::SetLogLevel msg) {
-            msg.get<"level">().value(service::LogLevel::Info);
+        (void)producer.send<turbofw::schema::service::SetLogLevel>([](turbofw::schema::service::SetLogLevel msg) {
+            msg.get<"level">().value(turbofw::schema::service::LogLevel::Info);
         });
 
         auto const ids = drainedRequestIds(consumer);
@@ -84,12 +86,13 @@ TEST_SUITE("SBERequestIdStampMixin") {
         auto consumer = TestConsumer{&queue};
 
         for (auto i = 0; i != 128; ++i) {
-            (void)producer.send<service::SetLogLevel>([](service::SetLogLevel msg) {
-                msg.get<"level">().value(service::LogLevel::Info);
+            (void)producer.send<turbofw::schema::service::SetLogLevel>([](turbofw::schema::service::SetLogLevel msg) {
+                msg.get<"level">().value(turbofw::schema::service::LogLevel::Info);
             });
-            (void)producer.send<market_data::SnapshotRequest>([](market_data::SnapshotRequest msg) {
-                msg.get<"depth">().value(10);
-            });
+            (void)producer.send<turbofw::schema::market_data::SnapshotRequest>(
+                [](turbofw::schema::market_data::SnapshotRequest msg) {
+                    msg.get<"depth">().value(10);
+                });
         }
 
         auto const ids = drainedRequestIds(consumer);
@@ -105,17 +108,18 @@ TEST_SUITE("SBERequestIdStampMixin") {
         auto producer = TestProducer{&queue};
         auto consumer = TestConsumer{&queue};
 
-        (void)producer.send<service::Heartbeat>([](service::Heartbeat msg) {
+        (void)producer.send<turbofw::schema::service::Heartbeat>([](turbofw::schema::service::Heartbeat msg) {
             msg.get<"ts">().value(1);
-            msg.get<"flags">().value(service::ServiceFlags{}.start(true));
+            msg.get<"flags">().value(turbofw::schema::service::ServiceFlags{}.start(true));
         });
 
-        auto result = std::vector<service::ServiceFlags>{};
+        auto result = std::vector<turbofw::schema::service::ServiceFlags>{};
         consumer.receive([&](std::span<std::byte const> buffer) {
-            auto const header = service::MessageHeader{const_cast<std::byte*>(buffer.data())};
-            REQUIRE_EQ(header.get<"templateId">().value(), service::Heartbeat::sbeTemplateId());
-            auto msg = service::Heartbeat{std::span<std::byte>{const_cast<std::byte*>(buffer.data()), buffer.size()},
-                header.sbeEncodedLength(), header.get<"blockLength">().value(), header.get<"version">().value()};
+            auto const header = turbofw::schema::service::MessageHeader{const_cast<std::byte*>(buffer.data())};
+            REQUIRE_EQ(header.get<"templateId">().value(), turbofw::schema::service::Heartbeat::sbeTemplateId());
+            auto msg = turbofw::schema::service::Heartbeat{
+                std::span<std::byte>{const_cast<std::byte*>(buffer.data()), buffer.size()}, header.sbeEncodedLength(),
+                header.get<"blockLength">().value(), header.get<"version">().value()};
             result.push_back(msg.get<"flags">().value());
         });
 

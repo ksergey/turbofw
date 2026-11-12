@@ -31,24 +31,24 @@ struct TestConsumer : public testing::Consumer, public mixin::SBEReceiveMixin, p
 };
 
 /// Publishes a Heartbeat carrying the given flag state
-auto publishBeat(TestProducer& producer, service::ServiceFlags flags) -> void {
-    (void)producer.send<service::Heartbeat>([flags](service::Heartbeat msg) {
+auto publishBeat(TestProducer& producer, turbofw::schema::service::ServiceFlags flags) -> void {
+    (void)producer.send<turbofw::schema::service::Heartbeat>([flags](turbofw::schema::service::Heartbeat msg) {
         msg.get<"ts">().value(realtimeNanos());
         msg.get<"flags">().value(flags);
     });
 }
 
 auto publishStopBeat(TestProducer& producer) -> void {
-    publishBeat(producer, service::ServiceFlags{}.stop(true));
+    publishBeat(producer, turbofw::schema::service::ServiceFlags{}.stop(true));
 }
 
 auto publishStartBeat(TestProducer& producer) -> void {
-    publishBeat(producer, service::ServiceFlags{}.start(true));
+    publishBeat(producer, turbofw::schema::service::ServiceFlags{}.start(true));
 }
 
 /// Drains the queue through the decode list (hooks run for every buffer, the callback does nothing)
 auto drain(TestConsumer& consumer) -> void {
-    consumer.receive<mp::List<service::Heartbeat>>([](service::Heartbeat) {});
+    consumer.receive<mp::List<turbofw::schema::service::Heartbeat>>([](turbofw::schema::service::Heartbeat) {});
 }
 
 } // namespace
@@ -88,14 +88,14 @@ TEST_SUITE("SBEAliveMixin") {
         auto consumer = TestConsumer{&queue};
         consumer.setAliveInterval(std::chrono::milliseconds{10});
 
-        (void)producer.send<service::SetLogLevel>([](service::SetLogLevel msg) {
-            msg.get<"level">().value(service::LogLevel::Info);
+        (void)producer.send<turbofw::schema::service::SetLogLevel>([](turbofw::schema::service::SetLogLevel msg) {
+            msg.get<"level">().value(turbofw::schema::service::LogLevel::Info);
         });
         drain(consumer); // SetLogLevel is service schema but not in the decode list
         CHECK(consumer.isAlive());
 
         std::this_thread::sleep_for(std::chrono::milliseconds{3});
-        (void)producer.send<trading::CancelAll>([](trading::CancelAll msg) {
+        (void)producer.send<turbofw::schema::trading::CancelAll>([](turbofw::schema::trading::CancelAll msg) {
             msg.get<"contextId">().value(1);
             msg.get<"requestId">().value(2);
         });
@@ -136,7 +136,7 @@ TEST_SUITE("SBEAliveMixin") {
         drain(consumer);
         CHECK_FALSE(consumer.isAlive());
 
-        (void)producer.send<trading::CancelAll>([](trading::CancelAll msg) {
+        (void)producer.send<turbofw::schema::trading::CancelAll>([](turbofw::schema::trading::CancelAll msg) {
             msg.get<"contextId">().value(1);
             msg.get<"requestId">().value(2);
         });

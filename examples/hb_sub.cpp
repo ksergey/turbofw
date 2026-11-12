@@ -54,7 +54,7 @@ int main(int argc, char* argv[]) {
         }
 
         while (true) {
-            consumer->receive<service::Heartbeat>([](auto msg) {
+            consumer->receive<turbofw::schema::service::Heartbeat>([](auto msg) {
                 auto const serviceId = turbofw::ServiceId{msg.template get<"serviceId">().value()};
                 auto const ts = msg.template get<"ts">().value();
 

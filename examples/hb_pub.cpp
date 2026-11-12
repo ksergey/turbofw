@@ -62,9 +62,9 @@ int main(int argc, char* argv[]) {
         }
 
         while (true) {
-            auto const sent = producer->send<service::Heartbeat>([](auto body) {
+            auto const sent = producer->send<turbofw::schema::service::Heartbeat>([](auto body) {
                 body.template get<"ts">().value(turbofw::realtimeNanos());
-                body.template get<"flags">().value(service::ServiceFlags{});
+                body.template get<"flags">().value(turbofw::schema::service::ServiceFlags{});
             });
             if (sent) {
                 std::print(stdout, "heartbeat sent\n");
