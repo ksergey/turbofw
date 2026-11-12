@@ -3,100 +3,67 @@
 
 #pragma once
 
-#include <algorithm>
-#include <expected>
-#include <filesystem>
-#include <map>
-#include <optional>
-#include <span>
-#include <string>
-#include <string_view>
-#include <vector>
-
-#include <fmt/format.h>
-
 #include <turboq/MPSCMessageQueue.h>
 #include <turboq/MulticastMessageQueue.h>
-#include <turboq/Platform.h>
 #include <turboq/SPSCMessageQueue.h>
 
+#include "detail/EnvironmentImpl.h"
+
 namespace turbofw {
-namespace detail {
-
-struct EnvironmentConfig;
-
-} // namespace detail
 
 /// Process environment for a service: config scope, working directories, shared memory queues
 class Environment {
 private:
-    enum class QueueEntryType {
-        Multicast,
-        MPSC,
-        SPSC,
-    };
+    using EnvironmentImpl = detail::EnvironmentImpl;
 
-    struct QueueEntry {
-        std::string name;
-        QueueEntryType type;
-        std::optional<std::size_t> capacity; ///< for spsc/multicast, bytes
-        std::optional<std::size_t> length;   ///< for mpsc, slot count
-        std::optional<std::size_t> slotSize; ///< for mpsc, slot size in bytes
-    };
+    EnvironmentImpl impl_;
 
-    std::string scope_;
-    std::filesystem::path workingDirectory_;
-    std::vector<std::filesystem::path> searchPath_;
-    std::vector<QueueEntry> queues_;
-
-    /// Opened queue handles, keyed by queue name.
-    /// turboq enforces single-producer/single-consumer with file locks owned by the queues'
-    /// fds, so the handles must stay alive for the environment lifetime: the alternative is a
-    /// silently released lock and undetected duplicate producers/consumers.
-    struct OpenQueue {
-        std::optional<turboq::MulticastMessageQueue> multicast;
-        std::optional<turboq::MPSCMessageQueue> mpsc;
-        std::optional<turboq::SPSCMessageQueue> spsc;
-    };
-    /// Not thread-safe: open queues once, up front (queue opening is a cold path)
-    mutable std::map<std::string, OpenQueue, std::less<>> openQueues_;
+    explicit Environment(EnvironmentImpl&& impl) noexcept : impl_{std::move(impl)} {}
 
 public:
     /// Extra variables for ${VAR} expansion, applied before the process environment
-    using Vars = std::map<std::string, std::string, std::less<>>;
+    using Vars = EnvironmentImpl::Vars;
 
     /// Load environment from a json string in memory
     /// vars are additional variables for ${VAR} expansion; process environment applies after them
     /// (e.g. {"NAME", serviceName} since the service name is only known at startup)
     [[nodiscard]] static auto loadFromJson(
-        std::string_view content, Vars vars = {}) noexcept -> std::expected<Environment, std::string>;
+        std::string_view content, Vars vars = {}) noexcept -> std::expected<Environment, std::string> {
+        return EnvironmentImpl::loadFromJson(content, vars).transform([](EnvironmentImpl&& impl) {
+            return Environment{std::move(impl)};
+        });
+    }
 
     /// Load environment from a json config file
     /// vars are additional variables for ${VAR} expansion; process environment applies after them.
     /// Scope expansion common: the expanded scope value becomes the ${SCOPE} variable for the rest of the config
     /// (e.g. {"NAME", appName} since service name is only known at startup)
     [[nodiscard]] static auto loadFromConfig(
-        std::filesystem::path const& configPath, Vars vars = {}) noexcept -> std::expected<Environment, std::string>;
+        std::filesystem::path const& configPath, Vars vars = {}) noexcept -> std::expected<Environment, std::string> {
+        return EnvironmentImpl::loadFromConfig(configPath, vars).transform([](EnvironmentImpl&& impl) {
+            return Environment{std::move(impl)};
+        });
+    }
 
     /// Config scope name, unique per config file and service instance ([A-Za-z0-9@._-] only)
     [[nodiscard]] auto scope() const noexcept -> std::string const& {
-        return scope_;
+        return impl_.scope;
     }
 
     /// Working directory, empty when not configured
     [[nodiscard]] auto workingDirectory() const noexcept -> std::filesystem::path const& {
-        return workingDirectory_;
+        return impl_.workingDirectory;
     }
 
     /// Directories to search files from, in config order
     [[nodiscard]] auto searchPath() const noexcept -> std::span<std::filesystem::path const> {
-        return searchPath_;
+        return impl_.searchPath;
     }
 
     /// Search a file relative to search-path entries, first match wins.
     /// Returns std::nullopt when the file is not found in any search-path entry
     [[nodiscard]] auto findFile(std::filesystem::path const& relative) const -> std::optional<std::filesystem::path> {
-        for (auto const& dir : searchPath_) {
+        for (auto const& dir : this->searchPath()) {
             auto const file = dir / relative;
             if (std::filesystem::exists(file)) {
                 return file;
@@ -106,26 +73,10 @@ public:
     }
 
     /// Queues configured for the scope: names, types and creation options (introspection)
-    [[nodiscard]] auto queues() const noexcept -> std::span<QueueEntry const> {
-        return queues_;
+    [[nodiscard]] auto queues() const noexcept {
+        // TODO: return range of std::string_view with queue names
+        return impl_.queues;
     }
-
-    /// Open the scope's multicast queue by name.
-    /// The queue type comes from the config: requesting a different queue type for a configured name is an error.
-    /// @param openOnly when true, opens the queue only (fails if not created yet); otherwise opens-or-creates
-    ///                 with options from config
-    /// @return an independent queue handle; the environment itself keeps the queue open (with its
-    ///         single-producer/single-consumer locks) for the environment lifetime
-    [[nodiscard]] auto getMulticastQueue(std::string_view name,
-        bool openOnly) const noexcept -> std::expected<turboq::MulticastMessageQueue, std::string>;
-
-    /// Open the scope's mpsc queue by name, see getMulticastQueue() for details
-    [[nodiscard]] auto getMPSCQueue(
-        std::string_view name, bool openOnly) const noexcept -> std::expected<turboq::MPSCMessageQueue, std::string>;
-
-    /// Open the scope's spsc queue by name, see getMulticastQueue() for details
-    [[nodiscard]] auto getSPSCQueue(
-        std::string_view name, bool openOnly) const noexcept -> std::expected<turboq::SPSCMessageQueue, std::string>;
 
     /// Create a producer (opens-or-creates the queue first).
     /// @tparam Producer is a type derived from the corresponding turboq producer type;
@@ -138,15 +89,13 @@ public:
         requires std::is_base_of_v<turboq::MulticastMessageQueue::Producer, Producer>
     [[nodiscard]] TURBOQ_FORCE_INLINE auto createProducer(
         std::string_view name, bool openOnly = true) const noexcept -> std::expected<Producer, std::string> {
-        auto error = std::string{};
-        if (auto* queue = this->getMulticastQueueCached(name, openOnly, error)) {
-            try {
-                return Producer{queue->createProducer()};
-            } catch (std::exception const& e) {
-                return std::unexpected{e.what()};
-            }
+        try {
+            return impl_.getMulticastQueue(name, openOnly).transform([](turboq::MulticastMessageQueue queue) {
+                return Producer{queue.createProducer()};
+            });
+        } catch (std::exception const& e) {
+            return std::unexpected{e.what()};
         }
-        return std::unexpected{std::move(error)};
     }
 
     /// Create a multicast consumer, see createProducer() for template/param docs
@@ -154,15 +103,13 @@ public:
         requires std::is_base_of_v<turboq::MulticastMessageQueue::Consumer, Consumer>
     [[nodiscard]] TURBOQ_FORCE_INLINE auto createConsumer(
         std::string_view name, bool openOnly = true) const noexcept -> std::expected<Consumer, std::string> {
-        auto error = std::string{};
-        if (auto* queue = this->getMulticastQueueCached(name, openOnly, error)) {
-            try {
-                return Consumer{queue->createConsumer()};
-            } catch (std::exception const& e) {
-                return std::unexpected{e.what()};
-            }
+        try {
+            return impl_.getMulticastQueue(name, openOnly).transform([](turboq::MulticastMessageQueue queue) {
+                return Consumer{queue.createConsumer()};
+            });
+        } catch (std::exception const& e) {
+            return std::unexpected{e.what()};
         }
-        return std::unexpected{std::move(error)};
     }
 
     /// Create an mpsc producer, see createProducer() for template/param docs
@@ -170,15 +117,13 @@ public:
         requires std::is_base_of_v<turboq::MPSCMessageQueue::Producer, Producer>
     [[nodiscard]] TURBOQ_FORCE_INLINE auto createProducer(
         std::string_view name, bool openOnly = true) const noexcept -> std::expected<Producer, std::string> {
-        auto error = std::string{};
-        if (auto* queue = this->getMPSCQueueCached(name, openOnly, error)) {
-            try {
-                return Producer{queue->createProducer()};
-            } catch (std::exception const& e) {
-                return std::unexpected{e.what()};
-            }
+        try {
+            return impl_.getMPSCQueue(name, openOnly).transform([](turboq::MPSCMessageQueue queue) {
+                return Producer{queue.createProducer()};
+            });
+        } catch (std::exception const& e) {
+            return std::unexpected{e.what()};
         }
-        return std::unexpected{std::move(error)};
     }
 
     /// Create the (single) mpsc consumer, see createProducer() for template/param docs
@@ -186,15 +131,13 @@ public:
         requires std::is_base_of_v<turboq::MPSCMessageQueue::Consumer, Consumer>
     [[nodiscard]] TURBOQ_FORCE_INLINE auto createConsumer(
         std::string_view name, bool openOnly = true) const noexcept -> std::expected<Consumer, std::string> {
-        auto error = std::string{};
-        if (auto* queue = this->getMPSCQueueCached(name, openOnly, error)) {
-            try {
-                return Consumer{queue->createConsumer()};
-            } catch (std::exception const& e) {
-                return std::unexpected{e.what()};
-            }
+        try {
+            return impl_.getMPSCQueue(name, openOnly).transform([](turboq::MPSCMessageQueue queue) {
+                return Consumer{queue.createConsumer()};
+            });
+        } catch (std::exception const& e) {
+            return std::unexpected{e.what()};
         }
-        return std::unexpected{std::move(error)};
     }
 
     /// Create an spsc producer, see createProducer() for template/param docs
@@ -202,15 +145,13 @@ public:
         requires std::is_base_of_v<turboq::SPSCMessageQueue::Producer, Producer>
     [[nodiscard]] TURBOQ_FORCE_INLINE auto createProducer(
         std::string_view name, bool openOnly = true) const noexcept -> std::expected<Producer, std::string> {
-        auto error = std::string{};
-        if (auto* queue = this->getSPSCQueueCached(name, openOnly, error)) {
-            try {
-                return Producer{queue->createProducer()};
-            } catch (std::exception const& e) {
-                return std::unexpected{e.what()};
-            }
+        try {
+            return impl_.getSPSCQueue(name, openOnly).transform([](turboq::SPSCMessageQueue queue) {
+                return Producer{queue.createProducer()};
+            });
+        } catch (std::exception const& e) {
+            return std::unexpected{e.what()};
         }
-        return std::unexpected{std::move(error)};
     }
 
     /// Create the (single) spsc consumer, see createProducer() for template/param docs
@@ -218,33 +159,14 @@ public:
         requires std::is_base_of_v<turboq::SPSCMessageQueue::Consumer, Consumer>
     [[nodiscard]] TURBOQ_FORCE_INLINE auto createConsumer(
         std::string_view name, bool openOnly = true) const noexcept -> std::expected<Consumer, std::string> {
-        auto error = std::string{};
-        if (auto* queue = this->getSPSCQueueCached(name, openOnly, error)) {
-            try {
-                return Consumer{queue->createConsumer()};
-            } catch (std::exception const& e) {
-                return std::unexpected{e.what()};
-            }
+        try {
+            return impl_.getSPSCQueue(name, openOnly).transform([](turboq::SPSCMessageQueue queue) {
+                return Consumer{queue.createConsumer()};
+            });
+        } catch (std::exception const& e) {
+            return std::unexpected{e.what()};
         }
-        return std::unexpected{std::move(error)};
     }
-
-private:
-    /// Open-or-create the queue by config and keep it cached (nullptr + error on failure)
-    [[nodiscard]] auto getMulticastQueueCached(
-        std::string_view name, bool openOnly, std::string& error) const -> turboq::MulticastMessageQueue*;
-
-    /// \overload
-    [[nodiscard]] auto getMPSCQueueCached(
-        std::string_view name, bool openOnly, std::string& error) const -> turboq::MPSCMessageQueue*;
-
-    /// \overload
-    [[nodiscard]] auto getSPSCQueueCached(
-        std::string_view name, bool openOnly, std::string& error) const -> turboq::SPSCMessageQueue*;
-
-    /// Build environment from parsed environment config, used by loadFromJson()/loadFromConfig()
-    [[nodiscard]] static auto load(
-        detail::EnvironmentConfig const& config, Vars vars) noexcept -> std::expected<Environment, std::string>;
 };
 
 } // namespace turbofw
