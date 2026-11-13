@@ -185,6 +185,137 @@ TEST_SUITE("Environment") {
         REQUIRE_NE(result.error().find("duplicated queue name \"q@cmd\""), std::string::npos);
     }
 
+    TEST_CASE("services section: parse, expand queue names, findService") {
+        auto const config = R"({
+            "scope": "dev",
+            "queues": [
+                { "name": "${SCOPE}/metadata@data", "type": "multicast", "capacity": "1MiB" },
+                { "name": "${SCOPE}/metadata@cmd", "type": "mpsc", "length": 64, "slot-size": "2KiB" }
+            ],
+            "services": [
+                { "name": "metadata", "service-id": 1,
+                  "queues": { "cmd": "${SCOPE}/metadata@cmd", "data": "${SCOPE}/metadata@data",
+                              "orders": "${SCOPE}/metadata@data" } }
+            ]
+        })";
+        auto const result = Environment::loadFromJson(config);
+        REQUIRE_MESSAGE(result, result.error());
+
+        auto const& env = *result;
+        REQUIRE_EQ(env.services().size(), 1);
+
+        auto const* service = env.findService("metadata");
+        REQUIRE(service != nullptr);
+        CHECK_EQ(service->name, "metadata");
+        CHECK_EQ(service->serviceId, 1);
+        REQUIRE_EQ(service->queues.size(), 3);
+        CHECK_EQ(service->queues.at("cmd"), "dev/metadata@cmd");
+        CHECK_EQ(service->queues.at("data"), "dev/metadata@data");
+        CHECK_EQ(service->queues.at("orders"), "dev/metadata@data");
+
+        CHECK(env.findService("nope") == nullptr);
+    }
+
+    TEST_CASE("environment without services section") {
+        auto const config = R"({
+            "scope": "test",
+            "queues": [ { "name": "q@cmd", "type": "mpsc", "length": 64, "slot-size": "1KiB" } ]
+        })";
+        auto const result = Environment::loadFromJson(config);
+        REQUIRE_MESSAGE(result, result.error());
+        CHECK(result->services().empty());
+    }
+
+    TEST_CASE("services section validation errors") {
+        auto const makeConfig = [](std::string_view services) {
+            return fmt::format(R"({{
+                "scope": "dev",
+                "queues": [ {{ "name": "dev/metadata@data", "type": "multicast", "capacity": "1MiB" }},
+                            {{ "name": "dev/metadata@cmd", "type": "mpsc", "length": 64, "slot-size": "2KiB" }} ],
+                "services": {}
+            }})",
+                services);
+        };
+
+        { // "cmd" and "data" queues are required
+            auto const result = Environment::loadFromJson(makeConfig(R"([
+                { "name": "metadata", "service-id": 1, "queues": { "data": "dev/metadata@data" } }
+            ])"));
+            REQUIRE_FALSE(result);
+            REQUIRE_NE(result.error().find("\"cmd\" and \"data\" queues are required"), std::string::npos);
+        }
+        { // every service queue must be defined in "queues"
+            auto const result = Environment::loadFromJson(makeConfig(R"([
+                { "name": "metadata", "service-id": 1,
+                  "queues": { "cmd": "dev/metadata@cmd", "data": "dev/metadata@data", "orders": "dev/other@data" } }
+            ])"));
+            REQUIRE_FALSE(result);
+            REQUIRE_NE(result.error().find("is not defined in \"queues\""), std::string::npos);
+        }
+        { // duplicated service name
+            auto const result = Environment::loadFromJson(makeConfig(R"([
+                { "name": "metadata", "service-id": 1, "queues": { "cmd": "dev/metadata@cmd", "data": "dev/metadata@data" } },
+                { "name": "metadata", "service-id": 2, "queues": { "cmd": "dev/metadata@cmd", "data": "dev/metadata@data" } }
+            ])"));
+            REQUIRE_FALSE(result);
+            REQUIRE_NE(result.error().find("duplicated service name \"metadata\""), std::string::npos);
+        }
+        { // service name charset (binder validation)
+            auto const result = Environment::loadFromJson(makeConfig(R"([
+                { "name": "meta data", "service-id": 1, "queues": { "cmd": "dev/metadata@cmd", "data": "dev/metadata@data" } }
+            ])"));
+            REQUIRE_FALSE(result);
+            REQUIRE_NE(result.error().find("name"), std::string::npos);
+        }
+    }
+
+    // Queue names may group queues per scope with '/': the directory is created on queue open
+    TEST_CASE("queue in a scope subdirectory") {
+        if (!fs::exists("/dev/shm")) {
+            MESSAGE("skip: /dev/shm is not available");
+            return;
+        }
+
+        auto const config = R"({
+            "scope": "turbofw-env-test-scope",
+            "queues": [ { "name": "${SCOPE}/turbofw-env-test@data", "type": "multicast", "capacity": "1MiB" } ]
+        })";
+        auto const result = Environment::loadFromJson(config);
+        REQUIRE_MESSAGE(result, result.error());
+
+        auto producer = result->createProducer<turboq::MulticastMessageQueue::Producer>(
+            result->scope() + "/turbofw-env-test@data", false);
+        REQUIRE_MESSAGE(producer, producer.error());
+
+        auto ec = std::error_code{};
+        fs::remove_all("/dev/shm/turbofw-env-test-scope", ec);
+    }
+
+    // "memory-source" overrides the default tmpfs scan: useful where /dev/shm is absent
+    TEST_CASE("memory-source override") {
+        auto const tempDir = fs::temp_directory_path() / "turbofw-env-test-mount";
+        auto ec = std::error_code{};
+        fs::remove_all(tempDir, ec);
+
+        auto const config = fmt::format(
+            R"({{
+                "scope": "dev",
+                "memory-source": "{}",
+                "queues": [ {{ "name": "${{SCOPE}}/metadata@data", "type": "multicast", "capacity": "1MiB" }} ]
+            }})",
+            tempDir.string());
+        auto const result = Environment::loadFromJson(config);
+        REQUIRE_MESSAGE(result, result.error());
+
+        auto producer =
+            result->createProducer<turboq::MulticastMessageQueue::Producer>(result->scope() + "/metadata@data", false);
+        REQUIRE_MESSAGE(producer, producer.error());
+
+        REQUIRE(fs::exists(tempDir / "dev" / "metadata@data"));
+
+        fs::remove_all(tempDir, ec);
+    }
+
     TEST_CASE("config validation errors") {
         auto const check = [](std::string_view config, std::string_view expectedError, Environment::Vars vars = {}) {
             auto const result = Environment::loadFromJson(config, std::move(vars));
@@ -198,8 +329,11 @@ TEST_SUITE("Environment") {
         check(R"({ "scope": "have space" })", "\"scope\" \"have space\"");
         check(R"({ "scope": "test", "queues": [ { "name": "q@data", "type": "sneaky", "capacity": "1KiB" } ] })",
             "not pass validation");
-        check(R"({ "scope": "test", "queues": [ { "name": "../escape", "type": "multicast" } ] })",
-            "not pass validation");
+        check(R"({ "scope": "test", "queues": [ { "name": "../escape", "type": "multicast", "capacity": "1KiB" } ] })",
+            "must not escape the memory source mount");
+        check(
+            R"({ "scope": "test", "queues": [ { "name": "/etc/passwd", "type": "multicast", "capacity": "1KiB" } ] })",
+            "must not escape the memory source mount");
         check(R"({ "scope": "test", "queues": [ { "name": "q@data", "type": "multicast" } ] })",
             "\"capacity\" is required");
         check(

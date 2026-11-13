@@ -30,6 +30,9 @@ public:
     /// Queue definition
     using QueueEntry = EnvironmentImpl::QueueEntry;
 
+    /// Statically configured service: identity and its queues by role ("cmd"/"data" required)
+    using ServiceEntry = EnvironmentImpl::ServiceEntry;
+
     /// Load environment from a json string in memory
     /// vars are additional variables for ${VAR} expansion; process environment applies after them
     /// (e.g. {"NAME", serviceName} since the service name is only known at startup)
@@ -43,7 +46,9 @@ public:
     [[nodiscard]] static auto loadFromConfig(
         std::filesystem::path const& configPath, Vars vars = {}) noexcept -> std::expected<Environment, std::string>;
 
-    /// Config scope name, unique per config file and service instance ([A-Za-z0-9@._-] only)
+    /// Config scope name: the name of the system/deployment the service belongs to; all services
+    /// of one system share it ([A-Za-z0-9@._-] only). The expanded scope value is available to the
+    /// rest of the config as ${SCOPE}
     [[nodiscard]] auto scope() const noexcept -> std::string const& {
         return impl_.scope;
     }
@@ -66,6 +71,21 @@ public:
     /// \see EnvironmentImpl::QueueEntry
     [[nodiscard]] auto queues() const noexcept -> std::span<QueueEntry const> {
         return std::span{impl_.queues};
+    }
+
+    /// Services statically configured in the environment ("services" section): identity and
+    /// queue names by role, empty when the section is absent
+    /// \see EnvironmentImpl::ServiceEntry
+    [[nodiscard]] auto services() const noexcept -> std::span<ServiceEntry const> {
+        return std::span{impl_.services};
+    }
+
+    /// Find a statically configured service by name, nullptr when absent
+    [[nodiscard]] auto findService(std::string_view name) const noexcept -> ServiceEntry const* {
+        auto const found = std::ranges::find_if(impl_.services, [&](auto const& service) {
+            return service.name == name;
+        });
+        return found != impl_.services.end() ? &*found : nullptr;
     }
 
     /// Create a producer (opens-or-creates the queue first).

@@ -17,6 +17,8 @@
 #include <turboq/Platform.h>
 #include <turboq/SPSCMessageQueue.h>
 
+#include "MemorySource.h"
+
 namespace turbofw::detail {
 
 struct EnvironmentConfig;
@@ -42,10 +44,21 @@ struct EnvironmentImpl {
         CreationOptionsVariant creationOptions;
     };
 
+    /// Statically configured service: identity and its queues by role ("cmd"/"data" required)
+    struct ServiceEntry {
+        std::string name;                          ///< unique service name
+        std::uint16_t serviceId;                   ///< assigned by configuration
+        std::map<std::string, std::string> queues; ///< role -> expanded queue name
+    };
+
     std::string scope;
     std::filesystem::path workingDirectory;
     std::vector<std::filesystem::path> searchPath;
     std::vector<QueueEntry> queues;
+    std::vector<ServiceEntry> services;
+    MemorySource memorySource;
+
+    explicit EnvironmentImpl(std::optional<std::filesystem::path> mount) : memorySource{std::move(mount)} {}
 
     using Vars = std::map<std::string, std::string, std::less<>>;
 
@@ -92,9 +105,10 @@ struct EnvironmentImpl {
 
         auto const createQueue = [&] {
             if (openOnly) {
-                return Q::makeQueue(queueName);
+                return Q::makeQueue(queueName, memorySource);
             } else {
-                return Q::makeQueue(queueName, *std::get_if<typename Q::CreationOptions>(&queueEntry->creationOptions));
+                return Q::makeQueue(
+                    queueName, *std::get_if<typename Q::CreationOptions>(&queueEntry->creationOptions), memorySource);
             }
         };
 

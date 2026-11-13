@@ -8,6 +8,7 @@
 #include <expected>
 #include <filesystem>
 #include <fstream>
+#include <map>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -216,6 +217,27 @@ struct JsonMapping<std::filesystem::path> {
     }
     static void write(nlohmann::json& json, std::filesystem::path const& value) {
         json = value.string();
+    }
+};
+
+/// Mapping for std::map (json object with dynamic keys)
+template <typename T, typename Compare, typename Allocator>
+struct JsonMapping<std::map<std::string, T, Compare, Allocator>> {
+    static void read(nlohmann::json const& json, std::map<std::string, T, Compare, Allocator>& value) {
+        value.clear();
+        if (!json.is_object()) {
+            throw ConfigError{"expected object"};
+        }
+        for (auto const& [key, entry] : json.items()) {
+            JsonMapping<T>::read(entry, value[key]);
+        }
+    }
+    static void write(nlohmann::json& json, std::map<std::string, T, Compare, Allocator> const& value) {
+        for (auto const& [key, entry] : value) {
+            nlohmann::json item;
+            JsonMapping<T>::write(item, entry);
+            json[key] = item;
+        }
     }
 };
 

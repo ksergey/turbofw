@@ -14,7 +14,7 @@
 namespace turbofw::detail {
 
 struct QueueEntryConfig {
-    std::string name;
+    std::string name; ///< may contain "${VAR}" entries, expanded and validated on load
     std::string type;
     std::optional<config::ByteSize> capacity;
     std::optional<std::uint64_t> length; ///< for mpsc, slot count (not bytes)
@@ -26,7 +26,7 @@ struct QueueEntryConfig {
 
         // clang-format off
         dto
-            & config::value<"name">(&name).validate(config::match("[A-Za-z0-9@._-]+"))
+            & config::value<"name">(&name)
             & config::value<"type">(&type).validate(config::oneOf("spsc"sv, "mpsc"sv, "multicast"sv))
             & config::value<"capacity">(&capacity).defaultValue(std::nullopt)
             & config::value<"length">(&length).defaultValue(std::nullopt)
@@ -36,11 +36,30 @@ struct QueueEntryConfig {
     }
 };
 
+struct ServiceConfig {
+    std::string name;
+    std::uint16_t serviceId;
+    std::map<std::string, std::string> queues; ///< role -> queue name (may contain "${VAR}" entries)
+
+    template <typename DTO>
+    void serialize(DTO& dto) {
+        // clang-format off
+        dto
+            & config::value<"name">(&name).validate(config::match("[A-Za-z0-9@._-]+"))
+            & config::value<"service-id">(&serviceId)
+            & config::value<"queues">(&queues)
+        ;
+        // clang-format on
+    }
+};
+
 struct EnvironmentConfig {
     std::string scope;
     std::optional<std::filesystem::path> workingDirectory;
+    std::optional<std::filesystem::path> memorySource;
     std::vector<std::filesystem::path> searchPath;
     std::vector<QueueEntryConfig> queues;
+    std::vector<ServiceConfig> services;
 
     template <typename DTO>
     void serialize(DTO& dto) {
@@ -48,8 +67,10 @@ struct EnvironmentConfig {
         dto
             & config::value<"scope">(&scope)
             & config::value<"working-directory">(&workingDirectory).defaultValue()
+            & config::value<"memory-source">(&memorySource).defaultValue()
             & config::value<"search-path">(&searchPath).defaultValue()
             & config::value<"queues">(&queues).defaultValue()
+            & config::value<"services">(&services).defaultValue()
         ;
         // clang-format on
     }
@@ -205,7 +226,17 @@ auto EnvironmentImpl::load(
         // it wins over a user-provided "SCOPE" since config is the source of truth
         vars.insert_or_assign("SCOPE", scope);
 
-        auto env = EnvironmentImpl{};
+        // Memory source mount: where the queue files are created
+        auto mount = std::optional<std::filesystem::path>{};
+        if (config.memorySource.has_value()) {
+            mount = expandPath(*config.memorySource);
+            if (mount->empty()) {
+                throw std::runtime_error{"\"memory-source\" must not be empty"};
+            }
+            createDirectories(*mount);
+        }
+
+        auto env = EnvironmentImpl{std::move(mount)};
 
         // Scope
         env.scope = std::move(scope);
@@ -231,16 +262,87 @@ auto EnvironmentImpl::load(
         }
 
         // Queues
+        auto const validateQueueName = [](std::string_view name, std::string_view source) {
+            auto const valid = [&] {
+                if (name.empty() || name.front() == '/' || name.back() == '/') {
+                    return false;
+                }
+                // no absolute override: "path / absolute-name" would replace the mount path entirely
+                if (!std::ranges::all_of(name, [](char c) {
+                        return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '@' ||
+                               c == '.' || c == '_' || c == '-' || c == '/';
+                    })) {
+                    return false;
+                }
+                // each '/'-separated part must be a plain component: no "." / ".." (traversal), no "//"
+                for (std::size_t pos = 0; pos <= name.size();) {
+                    auto const slash = name.find('/', pos);
+                    auto const part = name.substr(pos, (slash == std::string_view::npos ? name.size() : slash) - pos);
+                    if (part.empty() || part == "." || part == "..") {
+                        return false;
+                    }
+                    if (slash == std::string_view::npos) {
+                        break;
+                    }
+                    pos = slash + 1;
+                }
+                return true;
+            }();
+            if (!valid) {
+                throw std::runtime_error{fmt::format(
+                    "queue name \"{}\" (\"{}\") is not valid: must not be empty, may contain [A-Za-z0-9@._-/] only "
+                    "and must not escape the memory source mount",
+                    name, source)};
+            }
+        };
+
         env.queues.reserve(config.queues.size());
         for (auto const& queueConfig : config.queues) {
+            auto const name = expandString(queueConfig.name);
+            validateQueueName(name, queueConfig.name);
             if (auto const found = std::ranges::find_if(env.queues,
                     [&](auto const& q) {
-                        return q.name == queueConfig.name;
+                        return q.name == name;
                     });
                 found != env.queues.end()) {
-                throw std::runtime_error{fmt::format("duplicated queue name \"{}\"", queueConfig.name)};
+                throw std::runtime_error{fmt::format("duplicated queue name \"{}\"", name)};
             }
-            env.queues.push_back(makeQueueEntry(queueConfig));
+            auto queueEntry = makeQueueEntry(queueConfig);
+            queueEntry.name = name;
+            env.queues.push_back(std::move(queueEntry));
+        }
+
+        // Services
+        env.services.reserve(config.services.size());
+        for (auto const& serviceConfig : config.services) {
+            if (std::ranges::find_if(env.services, [&](auto const& s) {
+                    return s.name == serviceConfig.name;
+                }) != env.services.end()) {
+                throw std::runtime_error{fmt::format("duplicated service name \"{}\"", serviceConfig.name)};
+            }
+            auto const& queues = serviceConfig.queues;
+            if (!queues.contains("cmd") || !queues.contains("data")) {
+                throw std::runtime_error{
+                    fmt::format("service \"{}\": \"cmd\" and \"data\" queues are required", serviceConfig.name)};
+            }
+            auto serviceEntry = ServiceEntry{
+                .name = serviceConfig.name,
+                .serviceId = serviceConfig.serviceId,
+                .queues{},
+            };
+            for (auto const& [role, queueName] : queues) {
+                auto const expanded = expandString(queueName);
+                validateQueueName(expanded, queueName);
+                if (std::ranges::find_if(env.queues, [&](auto const& q) {
+                        return q.name == expanded;
+                    }) == env.queues.end()) {
+                    throw std::runtime_error{
+                        fmt::format("service \"{}\": queue \"{}\" (\"{}\") is not defined in \"queues\"",
+                            serviceConfig.name, expanded, queueName)};
+                }
+                serviceEntry.queues.emplace(role, expanded);
+            }
+            env.services.push_back(std::move(serviceEntry));
         }
 
         return env;

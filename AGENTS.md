@@ -100,6 +100,8 @@ don't duplicate them here.
 | `schemas/trading_schema.xml` | SBE trading schema (package `turbofw.schema.trading`, schemaId 3) → `<turbofw/schema/trading/schema.h>`, namespace `turbofw::schema::trading` |
 | `schemas/service_schema.xml` | SBE service schema (package `turbofw.schema.service`, schemaId 4) → `<turbofw/schema/service/schema.h>`, namespace `turbofw::schema::service` |
 | `schemas/common_types.xml` | Shared types, XIncluded into every schema |
+| `apps/<name>/` | A service executable: `main.cpp` (composition + poll loop), `env.json` (its queues and its `services` identity), `*_test.cpp`; each subdirectory has its own `CMakeLists.txt` |
+| `apps/MotoMoto/` | The Metadata service (`metadata` + `service` schemas): `store.{h,cpp}` — the SQLite instrument/service registry (source of truth, ids from persistent counters) |
 | `cmake/` | `GetCPM.cmake` (dependency bootstrap); test/bench discovery comes from turboq's `TurboQHelpers.cmake` (available after adding turboq) |
 | `.github/workflows/build-and-test.yml` | CI: compiler matrix, sanitizers |
 

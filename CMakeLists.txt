@@ -6,6 +6,7 @@ option(turbofw_SANITIZER "Build with sanitizer" OFF)
 option(turbofw_TSAN "Build with ThreadSanitizer" OFF)
 option(turbofw_BUILD_TESTS "Build tests (*_test.cpp files, linked against doctest)" ON)
 option(turbofw_BUILD_BENCHMARKS "Build benchmarks (*_bm.cpp files, linked against google-benchmark)" ON)
+option(turbofw_BUILD_APPS "Build apps (apps/*/main.cpp, service executables)" ON)
 option(turbofw_BUILD_EXAMPLES "Build examples (examples/*.cpp, linked against the framework)" ON)
 
 include(cmake/GetCPM.cmake)
@@ -15,6 +16,12 @@ CPMAddPackage("gh:doctest/doctest@2.5.3")
 CPMAddPackage("gh:fmtlib/fmt#12.2.0")
 CPMAddPackage("gh:jarro2783/cxxopts@3.3.1")
 CPMAddPackage("gh:rollbear/strong_type@16")
+# the repo tags its releases without the "v" prefix, which the shorthand form would add
+CPMAddPackage(
+    NAME sqlite-amalgamation
+    GITHUB_REPOSITORY azadkuh/sqlite-amalgamation
+    GIT_TAG 3.38.2
+)
 
 if (turbofw_BUILD_BENCHMARKS)
     CPMAddPackage(
@@ -45,6 +52,10 @@ if (turbofw_BUILD_TESTS)
 endif()
 
 add_subdirectory(code)
+
+if (turbofw_BUILD_APPS)
+    add_subdirectory(apps)
+endif()
 
 if (turbofw_BUILD_EXAMPLES)
     add_subdirectory(examples)
