@@ -4,6 +4,7 @@
 #include "EnvironmentImpl.h"
 
 #include <cstdlib>
+#include <optional>
 
 #include <turboq/Platform.h>
 
@@ -90,8 +91,8 @@ namespace {
 
 } // namespace
 
-auto EnvironmentImpl::loadFromJson(std::string_view content, Vars vars) noexcept
-    -> std::expected<EnvironmentImpl, std::string> {
+auto EnvironmentImpl::loadFromJson(
+    std::string_view content, Vars vars) noexcept -> std::expected<EnvironmentImpl, std::string> {
     EnvironmentConfig config;
     if (auto result = config::fromJson(config, content); !result) {
         return std::unexpected{fmt::format("can't load environment from json: {}", result.error())};
@@ -99,8 +100,8 @@ auto EnvironmentImpl::loadFromJson(std::string_view content, Vars vars) noexcept
     return load(config, std::move(vars));
 }
 
-auto EnvironmentImpl::loadFromConfig(std::filesystem::path const& configPath, Vars vars) noexcept
-    -> std::expected<EnvironmentImpl, std::string> {
+auto EnvironmentImpl::loadFromConfig(
+    std::filesystem::path const& configPath, Vars vars) noexcept -> std::expected<EnvironmentImpl, std::string> {
     detail::EnvironmentConfig config;
     if (auto result = config::fromJsonFile(config, configPath); !result) {
         return std::unexpected{
@@ -109,8 +110,8 @@ auto EnvironmentImpl::loadFromConfig(std::filesystem::path const& configPath, Va
     return load(config, std::move(vars));
 }
 
-auto EnvironmentImpl::load(EnvironmentConfig const& config, Vars vars) noexcept
-    -> std::expected<EnvironmentImpl, std::string> {
+auto EnvironmentImpl::load(
+    EnvironmentConfig const& config, Vars vars) noexcept -> std::expected<EnvironmentImpl, std::string> {
     try {
         auto const expandString = [&](std::string_view value) {
             return expandVars(value, vars);
@@ -142,9 +143,8 @@ auto EnvironmentImpl::load(EnvironmentConfig const& config, Vars vars) noexcept
                 return QueueEntry{
                     .name = config.name,
                     .type = QueueEntryType::Multicast,
-                    .capacity = config.capacity->bytes,
-                    .length = std::nullopt,
-                    .slotSize = std::nullopt,
+                    .creationOptions{
+                        turboq::MulticastMessageQueue::CreationOptions{.capacityHint = config.capacity->bytes}},
                 };
             } else if (config.type == "mpsc") {
                 if (!config.length.has_value() || !config.slotSize.has_value()) {
@@ -166,9 +166,8 @@ auto EnvironmentImpl::load(EnvironmentConfig const& config, Vars vars) noexcept
                 return QueueEntry{
                     .name = config.name,
                     .type = QueueEntryType::MPSC,
-                    .capacity = std::nullopt,
-                    .length = *config.length,
-                    .slotSize = config.slotSize->bytes,
+                    .creationOptions{turboq::MPSCMessageQueue::CreationOptions{
+                        .slotSizeHint = config.slotSize->bytes, .lengthHint = *config.length}},
                 };
             } else if (config.type == "spsc") {
                 if (!config.capacity.has_value()) {
@@ -186,9 +185,7 @@ auto EnvironmentImpl::load(EnvironmentConfig const& config, Vars vars) noexcept
                 return QueueEntry{
                     .name = config.name,
                     .type = QueueEntryType::SPSC,
-                    .capacity = config.capacity->bytes,
-                    .length = std::nullopt,
-                    .slotSize = std::nullopt,
+                    .creationOptions{turboq::SPSCMessageQueue::CreationOptions{.capacityHint = config.capacity->bytes}},
                 };
             } else {
                 throw std::runtime_error{fmt::format("unknown queue type \"{}\"", config.type)};
@@ -252,72 +249,15 @@ auto EnvironmentImpl::load(EnvironmentConfig const& config, Vars vars) noexcept
     }
 }
 
-auto EnvironmentImpl::getMulticastQueue(std::string_view queueName, bool openOnly) const noexcept
-    -> std::expected<turboq::MulticastMessageQueue, std::string> {
-    auto const queueEntry = this->findQueueEntry(queueName, QueueEntryType::Multicast);
-    if (!queueEntry) {
-        if (this->findQueueEntry(queueName) != nullptr) {
-            return std::unexpected{fmt::format("queue \"{}\" is not multicast queue", queueName)};
-        }
-        return std::unexpected{fmt::format("unknown queue \"{}\"", queueName)};
+auto format_as(EnvironmentImpl::QueueEntryType type) noexcept -> std::string_view {
+    using namespace std::string_view_literals;
+
+    switch (type) {
+    case EnvironmentImpl::QueueEntryType::Multicast: return "multicast"sv;
+    case EnvironmentImpl::QueueEntryType::MPSC: return "mpsc"sv;
+    case EnvironmentImpl::QueueEntryType::SPSC: return "spsc"sv;
     }
-
-    return (openOnly ? turboq::MulticastMessageQueue::makeQueue(queueName)
-                     : turboq::MulticastMessageQueue::makeQueue(queueName,
-                           turboq::MulticastMessageQueue::CreationOptions{.capacityHint = *queueEntry->capacity}))
-        .transform_error([&](std::error_code const& ec) {
-            return fmt::format("failed to get multicast queue \"{}\" ({})", queueName, ec.message());
-        });
-}
-
-auto EnvironmentImpl::getMPSCQueue(std::string_view queueName, bool openOnly) const noexcept
-    -> std::expected<turboq::MPSCMessageQueue, std::string> {
-    auto const queueEntry = this->findQueueEntry(queueName, QueueEntryType::MPSC);
-    if (!queueEntry) {
-        if (this->findQueueEntry(queueName) != nullptr) {
-            return std::unexpected{fmt::format("queue \"{}\" is not mpsc queue", queueName)};
-        }
-        return std::unexpected{fmt::format("unknown queue \"{}\"", queueName)};
-    }
-
-    return (openOnly ? turboq::MPSCMessageQueue::makeQueue(queueName)
-                     : turboq::MPSCMessageQueue::makeQueue(
-                           queueName, turboq::MPSCMessageQueue::CreationOptions{.slotSizeHint = *queueEntry->slotSize,
-                                          .lengthHint = *queueEntry->length}))
-        .transform_error([&](std::error_code const& ec) {
-            return fmt::format("failed to get mpsc queue \"{}\" ({})", queueName, ec.message());
-        });
-}
-
-auto EnvironmentImpl::getSPSCQueue(std::string_view queueName, bool openOnly) const noexcept
-    -> std::expected<turboq::SPSCMessageQueue, std::string> {
-    auto const queueEntry = this->findQueueEntry(queueName, QueueEntryType::SPSC);
-    if (!queueEntry) {
-        if (this->findQueueEntry(queueName) != nullptr) {
-            return std::unexpected{fmt::format("queue \"{}\" is not spsc queue", queueName)};
-        }
-        return std::unexpected{fmt::format("unknown queue \"{}\"", queueName)};
-    }
-
-    return (openOnly ? turboq::SPSCMessageQueue::makeQueue(queueName)
-                     : turboq::SPSCMessageQueue::makeQueue(
-                           queueName, turboq::SPSCMessageQueue::CreationOptions{.capacityHint = *queueEntry->capacity}))
-        .transform_error([&](std::error_code const& ec) {
-            return fmt::format("failed to get spsc queue \"{}\" ({})", queueName, ec.message());
-        });
-}
-
-auto EnvironmentImpl::findQueueEntry(std::string_view queueName) const noexcept -> QueueEntry const* {
-    auto const found = std::ranges::find_if(queues, [&](auto const& entry) {
-        return entry.name == queueName;
-    });
-    return found != queues.end() ? &*found : nullptr;
-}
-
-TURBOQ_FORCE_INLINE auto EnvironmentImpl::findQueueEntry(
-    std::string_view queueName, QueueEntryType queueType) const noexcept -> QueueEntry const* {
-    auto const found = this->findQueueEntry(queueName);
-    return (found != nullptr && found->type == queueType) ? found : nullptr;
+    return "unknown"sv;
 }
 
 } // namespace turbofw::detail

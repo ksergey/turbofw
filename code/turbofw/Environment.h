@@ -3,6 +3,9 @@
 
 #pragma once
 
+#include <ranges>
+
+#include <turboq-logger/Logging.h>
 #include <turboq/MPSCMessageQueue.h>
 #include <turboq/MulticastMessageQueue.h>
 #include <turboq/SPSCMessageQueue.h>
@@ -24,26 +27,21 @@ public:
     /// Extra variables for ${VAR} expansion, applied before the process environment
     using Vars = EnvironmentImpl::Vars;
 
+    /// Queue definition
+    using QueueEntry = EnvironmentImpl::QueueEntry;
+
     /// Load environment from a json string in memory
     /// vars are additional variables for ${VAR} expansion; process environment applies after them
     /// (e.g. {"NAME", serviceName} since the service name is only known at startup)
     [[nodiscard]] static auto loadFromJson(
-        std::string_view content, Vars vars = {}) noexcept -> std::expected<Environment, std::string> {
-        return EnvironmentImpl::loadFromJson(content, vars).transform([](EnvironmentImpl&& impl) {
-            return Environment{std::move(impl)};
-        });
-    }
+        std::string_view content, Vars vars = {}) noexcept -> std::expected<Environment, std::string>;
 
     /// Load environment from a json config file
     /// vars are additional variables for ${VAR} expansion; process environment applies after them.
     /// Scope expansion common: the expanded scope value becomes the ${SCOPE} variable for the rest of the config
     /// (e.g. {"NAME", appName} since service name is only known at startup)
     [[nodiscard]] static auto loadFromConfig(
-        std::filesystem::path const& configPath, Vars vars = {}) noexcept -> std::expected<Environment, std::string> {
-        return EnvironmentImpl::loadFromConfig(configPath, vars).transform([](EnvironmentImpl&& impl) {
-            return Environment{std::move(impl)};
-        });
-    }
+        std::filesystem::path const& configPath, Vars vars = {}) noexcept -> std::expected<Environment, std::string>;
 
     /// Config scope name, unique per config file and service instance ([A-Za-z0-9@._-] only)
     [[nodiscard]] auto scope() const noexcept -> std::string const& {
@@ -62,20 +60,12 @@ public:
 
     /// Search a file relative to search-path entries, first match wins.
     /// Returns std::nullopt when the file is not found in any search-path entry
-    [[nodiscard]] auto findFile(std::filesystem::path const& relative) const -> std::optional<std::filesystem::path> {
-        for (auto const& dir : this->searchPath()) {
-            auto const file = dir / relative;
-            if (std::filesystem::exists(file)) {
-                return file;
-            }
-        }
-        return std::nullopt;
-    }
+    [[nodiscard]] auto findFile(std::filesystem::path const& relative) const -> std::optional<std::filesystem::path>;
 
     /// Queues configured for the scope: names, types and creation options (introspection)
-    [[nodiscard]] auto queues() const noexcept {
-        // TODO: return range of std::string_view with queue names
-        return impl_.queues;
+    /// \see EnvironmentImpl::QueueEntry
+    [[nodiscard]] auto queues() const noexcept -> std::span<QueueEntry const> {
+        return std::span{impl_.queues};
     }
 
     /// Create a producer (opens-or-creates the queue first).
@@ -90,9 +80,10 @@ public:
     [[nodiscard]] TURBOQ_FORCE_INLINE auto createProducer(
         std::string_view name, bool openOnly = true) const noexcept -> std::expected<Producer, std::string> {
         try {
-            return impl_.getMulticastQueue(name, openOnly).transform([](turboq::MulticastMessageQueue queue) {
-                return Producer{queue.createProducer()};
-            });
+            return impl_.getQueue<turboq::MulticastMessageQueue>(name, openOnly)
+                .transform([](turboq::MulticastMessageQueue queue) {
+                    return Producer{queue.createProducer()};
+                });
         } catch (std::exception const& e) {
             return std::unexpected{e.what()};
         }
@@ -104,9 +95,10 @@ public:
     [[nodiscard]] TURBOQ_FORCE_INLINE auto createConsumer(
         std::string_view name, bool openOnly = true) const noexcept -> std::expected<Consumer, std::string> {
         try {
-            return impl_.getMulticastQueue(name, openOnly).transform([](turboq::MulticastMessageQueue queue) {
-                return Consumer{queue.createConsumer()};
-            });
+            return impl_.getQueue<turboq::MulticastMessageQueue>(name, openOnly)
+                .transform([](turboq::MulticastMessageQueue queue) {
+                    return Consumer{queue.createConsumer()};
+                });
         } catch (std::exception const& e) {
             return std::unexpected{e.what()};
         }
@@ -118,9 +110,10 @@ public:
     [[nodiscard]] TURBOQ_FORCE_INLINE auto createProducer(
         std::string_view name, bool openOnly = true) const noexcept -> std::expected<Producer, std::string> {
         try {
-            return impl_.getMPSCQueue(name, openOnly).transform([](turboq::MPSCMessageQueue queue) {
-                return Producer{queue.createProducer()};
-            });
+            return impl_.getQueue<turboq::MPSCMessageQueue>(name, openOnly)
+                .transform([](turboq::MPSCMessageQueue queue) {
+                    return Producer{queue.createProducer()};
+                });
         } catch (std::exception const& e) {
             return std::unexpected{e.what()};
         }
@@ -132,9 +125,10 @@ public:
     [[nodiscard]] TURBOQ_FORCE_INLINE auto createConsumer(
         std::string_view name, bool openOnly = true) const noexcept -> std::expected<Consumer, std::string> {
         try {
-            return impl_.getMPSCQueue(name, openOnly).transform([](turboq::MPSCMessageQueue queue) {
-                return Consumer{queue.createConsumer()};
-            });
+            return impl_.getQueue<turboq::MPSCMessageQueue>(name, openOnly)
+                .transform([](turboq::MPSCMessageQueue queue) {
+                    return Consumer{queue.createConsumer()};
+                });
         } catch (std::exception const& e) {
             return std::unexpected{e.what()};
         }
@@ -146,9 +140,10 @@ public:
     [[nodiscard]] TURBOQ_FORCE_INLINE auto createProducer(
         std::string_view name, bool openOnly = true) const noexcept -> std::expected<Producer, std::string> {
         try {
-            return impl_.getSPSCQueue(name, openOnly).transform([](turboq::SPSCMessageQueue queue) {
-                return Producer{queue.createProducer()};
-            });
+            return impl_.getQueue<turboq::SPSCMessageQueue>(name, openOnly)
+                .transform([](turboq::SPSCMessageQueue queue) {
+                    return Producer{queue.createProducer()};
+                });
         } catch (std::exception const& e) {
             return std::unexpected{e.what()};
         }
@@ -160,13 +155,17 @@ public:
     [[nodiscard]] TURBOQ_FORCE_INLINE auto createConsumer(
         std::string_view name, bool openOnly = true) const noexcept -> std::expected<Consumer, std::string> {
         try {
-            return impl_.getSPSCQueue(name, openOnly).transform([](turboq::SPSCMessageQueue queue) {
-                return Consumer{queue.createConsumer()};
-            });
+            return impl_.getQueue<turboq::SPSCMessageQueue>(name, openOnly)
+                .transform([](turboq::SPSCMessageQueue queue) {
+                    return Consumer{queue.createConsumer()};
+                });
         } catch (std::exception const& e) {
             return std::unexpected{e.what()};
         }
     }
+
+    void initLogger();
+    void shutdownLogger();
 };
 
 } // namespace turbofw

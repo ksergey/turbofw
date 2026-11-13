@@ -43,7 +43,7 @@ target_compile_options(${TargetName}
 target_include_directories(${TargetName}
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(${TargetName}
-    PUBLIC turboq::turboq turboq::reactor nlohmann_json::nlohmann_json fmt::fmt strong_type::strong_type)
+    PUBLIC turboq::turboq turboq::logger turboq::reactor nlohmann_json::nlohmann_json fmt::fmt strong_type::strong_type)
 target_link_libraries(${TargetName}
     PUBLIC ${TargetName}::market_data-sbe ${TargetName}::metadata-sbe ${TargetName}::trading-sbe ${TargetName}::service-sbe)
 
