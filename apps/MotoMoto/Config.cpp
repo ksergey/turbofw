@@ -23,8 +23,15 @@ void ServiceConfig::serialize(DTO& dto) {
 
 template <typename DTO>
 void LoggerConfig::serialize(DTO& dto) {
+    using namespace std::string_view_literals;
+
     // clang-format off
     dto
+        & conf::value<"logLevel">(&logLevel)
+            .defaultValue("debug")
+            .validate(conf::oneOf("error"sv, "warning"sv, "warn"sv, "notice"sv, "info"sv, "debug"sv,
+                        "tracel1"sv, "trace_l1"sv, "trace"sv, "tracel2"sv, "trace_l2"sv, "tracel3"sv,
+                        "trace_l3"sv))
     ;
     // clang-format on
 }

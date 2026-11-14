@@ -1,5 +1,8 @@
 {
     "service": {
         "name": "MotoMoto"
+    },
+    "logger": {
+        "logLevel": "trace"
     }
 }

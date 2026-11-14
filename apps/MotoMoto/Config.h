@@ -7,17 +7,21 @@
 #include <filesystem>
 #include <string>
 
+#include <turbofw/Logging.h>
+
 namespace app {
 
 struct ServiceConfig {
-    std::string name; // service name
+    std::string name; ///< Service name
 
     template <typename DTO>
     void serialize(DTO& dto);
 };
 
 struct LoggerConfig {
-    // TODO: add LogLevel, queue size, etc...
+    std::string logLevel; ///< Max log verbosity level
+
+    // TODO: add queue size, etc...
     template <typename DTO>
     void serialize(DTO& dto);
 };
