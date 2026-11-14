@@ -27,6 +27,8 @@
 #include <turboq/MPSCMessageQueue.h>
 #include <turboq/MulticastMessageQueue.h>
 
+#include <turbofw/Logging.h>
+
 #include "Config.h"
 #include "Process.h"
 
@@ -415,6 +417,8 @@ private:
 int main(int argc, char* argv[]) {
     using namespace app;
     using turbofw::Environment;
+    using turbofw::initLoggerStdOut;
+    using turbofw::shutdownLogger;
 
     try {
         auto options = cxxopts::Options{"MotoMoto", "The Metadata service"};
@@ -423,6 +427,7 @@ int main(int argc, char* argv[]) {
             ("e,env", "Path to environment config", cxxopts::value<std::filesystem::path>(), "PATH")
             ("c,config", "Path to service config", cxxopts::value<std::filesystem::path>(), "PATH")
             ("d,dump", "Dump config and exit")
+            ("stdout", "Log to stdout")
             ("h,help", "Print this help and exit")
         ;
         // clang-format on
@@ -452,6 +457,10 @@ int main(int argc, char* argv[]) {
         auto const env = Environment::loadFromFile(parseResult["env"].as<std::filesystem::path>());
         if (!env) {
             throw std::runtime_error{env.error()};
+        }
+
+        if (parseResult.count("stdout")) {
+            initLoggerStdOut();
         }
 
         Process{*config, *env}.run();

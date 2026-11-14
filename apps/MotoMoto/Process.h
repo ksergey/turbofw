@@ -38,6 +38,8 @@ private:
     Producer producer_;
     Consumer consumer_;
 
+    bool running_{false};
+
 public:
     Process(Process const&) = delete;
     Process& operator=(Process const&) = delete;

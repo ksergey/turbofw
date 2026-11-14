@@ -14,4 +14,10 @@ using turboq::logger::logLevelFromString;
 using turboq::logger::logLevelToString;
 using turboq::logger::setLogLevel;
 
+/// Init logger with logging to stdout
+void initLoggerStdOut();
+
+/// Shutdown logger
+void shutdownLogger();
+
 } // namespace turbofw
