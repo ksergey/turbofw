@@ -66,6 +66,7 @@ struct SBEReceiveMixin {
                     }
                 });
 
+                // TODO: need an mixin which drop processing on not match field value
                 counters.handled += tryDecodeSBE<L, Fn>(buffer, header, std::forward<Fn>(fn)) ? 1u : 0u;
             }();
 

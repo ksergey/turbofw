@@ -20,6 +20,7 @@ struct MakeProducer : P, mp::Inherit<L> {
 
     MakeProducer(MakeProducer&&) = default;
     MakeProducer& operator=(MakeProducer&&) = default;
+    MakeProducer() = default;
 
     MakeProducer(P&& p) noexcept : P{std::move(p)} {}
 };
@@ -32,6 +33,7 @@ struct MakeConsumer : C, mp::Inherit<L> {
 
     MakeConsumer(MakeConsumer&&) = default;
     MakeConsumer& operator=(MakeConsumer&&) = default;
+    MakeConsumer() = default;
 
     MakeConsumer(C&& c) noexcept : C{std::move(c)} {}
 };

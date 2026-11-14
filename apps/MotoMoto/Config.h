@@ -21,7 +21,6 @@ struct ServiceConfig {
 struct LoggerConfig {
     std::string logLevel; ///< Max log verbosity level
 
-    // TODO: add queue size, etc...
     template <typename DTO>
     void serialize(DTO& dto);
 };
