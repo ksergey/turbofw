@@ -70,6 +70,20 @@ using MetadataRegisterStatus = turbofw::schema::metadata::RegisterStatus;
 using ServiceRequestStatus = turbofw::schema::service::RequestStatus;
 using MetadataRequestStatus = turbofw::schema::metadata::RequestStatus;
 
+/// Maps the protocol log level to the runtime logger level.
+/// Off has no counterpart in the logger: the closest is the quietest level
+auto toLoggerLevel(turbofw::schema::service::LogLevel value) noexcept -> turbofw::LogLevel {
+    switch (value) {
+    case turbofw::schema::service::LogLevel::Trace: return turbofw::LogLevel::TraceL1;
+    case turbofw::schema::service::LogLevel::Debug: return turbofw::LogLevel::Debug;
+    case turbofw::schema::service::LogLevel::Info: return turbofw::LogLevel::Info;
+    case turbofw::schema::service::LogLevel::Warn: return turbofw::LogLevel::Warning;
+    case turbofw::schema::service::LogLevel::Error:
+    case turbofw::schema::service::LogLevel::Off:
+    default: return turbofw::LogLevel::Error;
+    }
+}
+
 /// The metadata protocol: translates schema messages to/from the store.
 /// Responses echo (appId, requestId); spontaneous messages carry both null.
 /// Store failures are printed and the message is dropped: there is no retry yet (TODO).
@@ -90,7 +104,7 @@ public:
             .reportedTs = msg.get<"reportedTs">().value(),
         });
         if (!result) {
-            std::println(stderr, "upsertService(\"{}\") failed: {}", name, result.error());
+            tq_error("upsertService(\"{}\") failed: {}", name, result.error());
             return;
         }
 
@@ -105,7 +119,7 @@ public:
             body.template get<"version">().value(result->version);
         });
         if (!sent) {
-            std::println(stderr, "can't send RegisterServiceResult: {}", sent.error().message());
+            tq_error("can't send RegisterServiceResult: {}", sent.error().message());
         }
 
         if (result->status == motomoto::RegisterStatus::Created ||
@@ -143,7 +157,7 @@ public:
             .reportedTs = msg.get<"reportedTs">().value(),
         });
         if (!result) {
-            std::println(stderr, "upsertInstrument(\"{}\") failed: {}", exchangeSymbol, result.error());
+            tq_error("upsertInstrument(\"{}\") failed: {}", exchangeSymbol, result.error());
             return;
         }
 
@@ -158,7 +172,7 @@ public:
             body.template get<"version">().value(result->version);
         });
         if (!sent) {
-            std::println(stderr, "can't send RegisterInstrumentResult: {}", sent.error().message());
+            tq_error("can't send RegisterInstrumentResult: {}", sent.error().message());
         }
 
         if (result->status == motomoto::RegisterStatus::Created ||
@@ -186,7 +200,7 @@ public:
         };
         auto const rows = store_.queryServices(query);
         if (!rows) {
-            std::println(stderr, "queryServices failed: {}", rows.error());
+            tq_error("queryServices failed: {}", rows.error());
             sendRequestComplete(msg, MetadataRequestStatus::Rejected, 0);
             return;
         }
@@ -216,7 +230,7 @@ public:
         };
         auto const rows = store_.queryInstruments(query);
         if (!rows) {
-            std::println(stderr, "queryInstruments failed: {}", rows.error());
+            tq_error("queryInstruments failed: {}", rows.error());
             sendRequestComplete(msg, MetadataRequestStatus::Rejected, 0);
             return;
         }
@@ -230,7 +244,7 @@ public:
     }
 
     void operator()(turbofw::schema::service::SetLogLevel msg) {
-        // TODO: the runtime logger is not wired yet: acknowledge with the requested level
+        turbofw::setLogLevel(toLoggerLevel(msg.get<"level">().value()));
         auto const appId = msg.get<"appId">();
         auto const sent = producer_.send<turbofw::schema::service::SetLogLevelResult>([&](auto body) {
             if (appId.present()) {
@@ -243,7 +257,7 @@ public:
             body.template get<"level">().value(msg.get<"level">().value());
         });
         if (!sent) {
-            std::println(stderr, "can't send SetLogLevelResult: {}", sent.error().message());
+            tq_error("can't send SetLogLevelResult: {}", sent.error().message());
         }
     }
 
@@ -335,7 +349,7 @@ private:
             body.template get<"requestQueue">().value(row.requestQueue);
         });
         if (!sent) {
-            std::println(stderr, "can't send ServiceDefinition: {}", sent.error().message());
+            tq_error("can't send ServiceDefinition: {}", sent.error().message());
             return false;
         }
         return true;
@@ -390,7 +404,7 @@ private:
             body.template get<"symbol">().value(row.symbol);
         });
         if (!sent) {
-            std::println(stderr, "can't send InstrumentDefinition: {}", sent.error().message());
+            tq_error("can't send InstrumentDefinition: {}", sent.error().message());
             return false;
         }
         return true;
@@ -404,7 +418,7 @@ private:
             body.template get<"count">().value(static_cast<std::uint32_t>(count));
         });
         if (!sent) {
-            std::println(stderr, "can't send RequestComplete: {}", sent.error().message());
+            tq_error("can't send RequestComplete: {}", sent.error().message());
         }
     }
 
@@ -417,7 +431,9 @@ private:
 int main(int argc, char* argv[]) {
     using namespace app;
     using turbofw::Environment;
+    using turbofw::initLoggerDailyFile;
     using turbofw::initLoggerStdOut;
+    using turbofw::logLevelFromString;
     using turbofw::shutdownLogger;
 
     try {
@@ -462,11 +478,17 @@ int main(int argc, char* argv[]) {
         if (parseResult.count("stdout")) {
             initLoggerStdOut();
         } else {
-            // TODO: initLoggerDailyFile
+            // the daily log file goes under the working directory (or the current one)
+            auto const logPrefix = env->workingDirectory().empty() ? std::filesystem::path{"logs"} / "MotoMoto"
+                                                                   : env->workingDirectory() / "logs" / "MotoMoto";
+            auto const logLevel = logLevelFromString(config->logger.logLevel).value_or(turbofw::LogLevel::Debug);
+            initLoggerDailyFile(logPrefix, logLevel);
         }
 
         // Run process loop
         Process{*config, *env}.run();
+
+        shutdownLogger();
 
     } catch (std::exception const& e) {
         std::println(stderr, "ERROR: {}", e.what());
