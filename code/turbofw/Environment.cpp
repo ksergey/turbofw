@@ -5,16 +5,16 @@
 
 namespace turbofw {
 
-auto Environment::loadFromJson(
-    std::string_view content, Vars vars) noexcept -> std::expected<Environment, std::string> {
+auto Environment::loadFromJson(std::string_view content, Vars vars) noexcept
+    -> std::expected<Environment, std::string> {
     return EnvironmentImpl::loadFromJson(content, vars).transform([](EnvironmentImpl&& impl) {
         return Environment{std::move(impl)};
     });
 }
 
-auto Environment::loadFromConfig(
-    std::filesystem::path const& configPath, Vars vars) noexcept -> std::expected<Environment, std::string> {
-    return EnvironmentImpl::loadFromConfig(configPath, vars).transform([](EnvironmentImpl&& impl) {
+auto Environment::loadFromFile(std::filesystem::path const& configPath, Vars vars) noexcept
+    -> std::expected<Environment, std::string> {
+    return EnvironmentImpl::loadFromFile(configPath, vars).transform([](EnvironmentImpl&& impl) {
         return Environment{std::move(impl)};
     });
 }

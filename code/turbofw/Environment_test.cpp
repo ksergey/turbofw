@@ -109,7 +109,7 @@ TEST_SUITE("Environment") {
             auto stream = std::ofstream{dir.path() / "env.json", std::ios::binary};
             stream << config;
         }
-        auto const envResult = Environment::loadFromConfig(dir.path() / "env.json");
+        auto const envResult = Environment::loadFromFile(dir.path() / "env.json");
         REQUIRE_MESSAGE(envResult, envResult.error());
         CHECK_EQ(envResult->scope(), "file-scope");
         CHECK_EQ(envResult->queues().size(), 0);
@@ -360,7 +360,7 @@ TEST_SUITE("Environment") {
     TEST_CASE("missing config file is an error") {
         auto dir = TempDir{};
 
-        auto const result = Environment::loadFromConfig(dir.path() / "nope.json");
+        auto const result = Environment::loadFromFile(dir.path() / "nope.json");
         REQUIRE_FALSE(result);
         REQUIRE_NE(result.error().find("nope.json"), std::string::npos);
     }

@@ -27,6 +27,9 @@
 #include <turboq/MPSCMessageQueue.h>
 #include <turboq/MulticastMessageQueue.h>
 
+#include "Config.h"
+#include "Process.h"
+
 #include "store.h"
 
 // clang-format off
@@ -410,11 +413,16 @@ private:
 } // namespace
 
 int main(int argc, char* argv[]) {
+    using namespace app;
+    using turbofw::Environment;
+
     try {
         auto options = cxxopts::Options{"MotoMoto", "The Metadata service"};
         // clang-format off
         options.add_options()
             ("e,env", "Path to environment config", cxxopts::value<std::filesystem::path>(), "PATH")
+            ("c,config", "Path to service config", cxxopts::value<std::filesystem::path>(), "PATH")
+            ("d,dump", "Dump config and exit")
             ("h,help", "Print this help and exit")
         ;
         // clang-format on
@@ -424,15 +432,31 @@ int main(int argc, char* argv[]) {
             std::print(stderr, "{}\n", options.help({"", "Group"}));
             return EXIT_SUCCESS;
         }
+
+        if (!parseResult.count("config")) {
+            throw std::runtime_error{"option '--config' is mandatory"};
+        }
+        auto const config = Config::loadFromFile(parseResult["config"].as<std::filesystem::path>());
+        if (!config) {
+            throw std::runtime_error{config.error()};
+        }
+
+        if (parseResult.count("dump")) {
+            std::print(stdout, "{}\n", config->toJson());
+            return EXIT_FAILURE;
+        }
+
         if (!parseResult.count("env")) {
             throw std::runtime_error{"option '--env' is mandatory"};
         }
-
-        auto const env = turbofw::Environment::loadFromConfig(parseResult["env"].as<std::filesystem::path>());
+        auto const env = Environment::loadFromFile(parseResult["env"].as<std::filesystem::path>());
         if (!env) {
             throw std::runtime_error{env.error()};
         }
 
+        Process{*config, *env}.run();
+
+#if 0
         auto const* service = env->findService(kServiceName);
         if (service == nullptr) {
             throw std::runtime_error{std::format("service \"{}\" is not configured in the environment", kServiceName)};
@@ -482,7 +506,7 @@ int main(int argc, char* argv[]) {
 
         producer->stopHeartbeating();
         std::println(stdout, "MotoMoto stopped");
-
+#endif
     } catch (std::exception const& e) {
         std::println(stderr, "ERROR: {}", e.what());
         return EXIT_FAILURE;

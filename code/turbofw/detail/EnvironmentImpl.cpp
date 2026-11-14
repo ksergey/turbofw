@@ -112,8 +112,8 @@ namespace {
 
 } // namespace
 
-auto EnvironmentImpl::loadFromJson(
-    std::string_view content, Vars vars) noexcept -> std::expected<EnvironmentImpl, std::string> {
+auto EnvironmentImpl::loadFromJson(std::string_view content, Vars vars) noexcept
+    -> std::expected<EnvironmentImpl, std::string> {
     EnvironmentConfig config;
     if (auto result = config::fromJson(config, content); !result) {
         return std::unexpected{fmt::format("can't load environment from json: {}", result.error())};
@@ -121,8 +121,8 @@ auto EnvironmentImpl::loadFromJson(
     return load(config, std::move(vars));
 }
 
-auto EnvironmentImpl::loadFromConfig(
-    std::filesystem::path const& configPath, Vars vars) noexcept -> std::expected<EnvironmentImpl, std::string> {
+auto EnvironmentImpl::loadFromFile(std::filesystem::path const& configPath, Vars vars) noexcept
+    -> std::expected<EnvironmentImpl, std::string> {
     detail::EnvironmentConfig config;
     if (auto result = config::fromJsonFile(config, configPath); !result) {
         return std::unexpected{
@@ -131,8 +131,8 @@ auto EnvironmentImpl::loadFromConfig(
     return load(config, std::move(vars));
 }
 
-auto EnvironmentImpl::load(
-    EnvironmentConfig const& config, Vars vars) noexcept -> std::expected<EnvironmentImpl, std::string> {
+auto EnvironmentImpl::load(EnvironmentConfig const& config, Vars vars) noexcept
+    -> std::expected<EnvironmentImpl, std::string> {
     try {
         auto const expandString = [&](std::string_view value) {
             return expandVars(value, vars);

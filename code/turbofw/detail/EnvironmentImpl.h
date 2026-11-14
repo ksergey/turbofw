@@ -62,21 +62,21 @@ struct EnvironmentImpl {
 
     using Vars = std::map<std::string, std::string, std::less<>>;
 
-    [[nodiscard]] static auto loadFromJson(
-        std::string_view content, Vars vars) noexcept -> std::expected<EnvironmentImpl, std::string>;
+    [[nodiscard]] static auto loadFromJson(std::string_view content, Vars vars) noexcept
+        -> std::expected<EnvironmentImpl, std::string>;
 
-    [[nodiscard]] static auto loadFromConfig(
-        std::filesystem::path const& configPath, Vars vars) noexcept -> std::expected<EnvironmentImpl, std::string>;
+    [[nodiscard]] static auto loadFromFile(std::filesystem::path const& configPath, Vars vars) noexcept
+        -> std::expected<EnvironmentImpl, std::string>;
 
-    [[nodiscard]] static auto load(
-        EnvironmentConfig const& config, Vars vars) noexcept -> std::expected<EnvironmentImpl, std::string>;
+    [[nodiscard]] static auto load(EnvironmentConfig const& config, Vars vars) noexcept
+        -> std::expected<EnvironmentImpl, std::string>;
 
     /// Open or create turboq queue
     template <typename Q>
         requires std::is_same_v<Q, turboq::MulticastMessageQueue> || std::is_same_v<Q, turboq::MPSCMessageQueue> ||
-                     std::is_same_v<Q, turboq::SPSCMessageQueue>
-    [[nodiscard]] auto getQueue(
-        std::string_view queueName, bool openOnly) const noexcept -> std::expected<Q, std::string> {
+                 std::is_same_v<Q, turboq::SPSCMessageQueue>
+    [[nodiscard]] auto getQueue(std::string_view queueName, bool openOnly) const noexcept
+        -> std::expected<Q, std::string> {
         constexpr auto queueType = [] {
             if constexpr (std::is_same_v<Q, turboq::MulticastMessageQueue>) {
                 return QueueEntryType::Multicast;
