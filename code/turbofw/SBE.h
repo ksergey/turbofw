@@ -16,6 +16,10 @@
 
 namespace turbofw {
 
+/// List of SBE messages
+template <typename... Ms>
+using SBEMessages = mp::List<Ms...>;
+
 /// Checks M is a generated SBE message type decodable from a raw buffer: it carries the (schemaId, templateId)
 /// dispatch key and the per-schema message header type alias. Comparison happens against the header fields read
 /// from the buffer, not against the message's fixed constants.

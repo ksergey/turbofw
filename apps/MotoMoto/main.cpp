@@ -461,61 +461,13 @@ int main(int argc, char* argv[]) {
 
         if (parseResult.count("stdout")) {
             initLoggerStdOut();
+        } else {
+            // TODO: initLoggerDailyFile
         }
 
+        // Run process loop
         Process{*config, *env}.run();
 
-#if 0
-        auto const* service = env->findService(kServiceName);
-        if (service == nullptr) {
-            throw std::runtime_error{std::format("service \"{}\" is not configured in the environment", kServiceName)};
-        }
-
-        auto store = [&] {
-            auto const dbPath = env->workingDirectory().empty() ? std::filesystem::path{"MotoMoto.db"}
-                                                                : env->workingDirectory() / "MotoMoto.db";
-            auto result = motomoto::Store::open(dbPath);
-            if (!result) {
-                throw std::runtime_error{result.error()};
-            }
-            return std::move(result).value();
-        }();
-
-        auto producer = env->createProducer<OutProducer>(service->queues.at("data"), false);
-        if (!producer) {
-            throw std::runtime_error{producer.error()};
-        }
-        auto consumer = env->createConsumer<InConsumer>(service->queues.at("cmd"), false);
-        if (!consumer) {
-            throw std::runtime_error{consumer.error()};
-        }
-
-        producer->setServiceId(turbofw::ServiceId{service->serviceId});
-
-        std::signal(SIGINT, [](int) {
-            stopRequested.store(true, std::memory_order_relaxed);
-        });
-        std::signal(SIGTERM, [](int) {
-            stopRequested.store(true, std::memory_order_relaxed);
-        });
-
-        auto dispatcher = Dispatcher{*producer, store};
-        producer->startHeartbeating();
-        std::println(
-            stdout, "MotoMoto started: data=\"{}\" cmd=\"{}\"", service->queues.at("data"), service->queues.at("cmd"));
-
-        while (!stopRequested.load(std::memory_order_relaxed)) {
-            auto const counters = consumer->receive<Requests>(dispatcher);
-            producer->keepAlive();
-            if (counters.received == 0) {
-                // TODO: a blocking wait (or an event source) instead of the poll
-                std::this_thread::sleep_for(std::chrono::milliseconds{1});
-            }
-        }
-
-        producer->stopHeartbeating();
-        std::println(stdout, "MotoMoto stopped");
-#endif
     } catch (std::exception const& e) {
         std::println(stderr, "ERROR: {}", e.what());
         return EXIT_FAILURE;

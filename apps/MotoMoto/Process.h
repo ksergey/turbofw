@@ -5,11 +5,13 @@
 
 #include <turbofw/Environment.h>
 #include <turbofw/ProducerConsumerTraits.h>
+#include <turbofw/SBE.h>
 #include <turbofw/Types.h>
 #include <turbofw/mixin/SBEKeepAliveMixin.h>
 #include <turbofw/mixin/SBEReceiveMixin.h>
 #include <turbofw/mixin/SBESendMixin.h>
 #include <turbofw/mixin/SBEServiceIdStampMixin.h>
+#include <turbofw/schema/metadata/schema.h>
 
 #include "Config.h"
 
@@ -33,6 +35,10 @@ private:
             turbofw::mixin::SBEReceiveMixin
         >
     >;
+    using Requests = turbofw::SBEMessages<
+        turbofw::schema::metadata::RegisterInstrument,
+        turbofw::schema::metadata::ServiceRequest
+    >;
     // clang-format on
 
     Producer producer_;
@@ -51,6 +57,10 @@ public:
 
     /// Request to shutdown process loop
     void shutdown();
+
+private:
+    void processRequest(turbofw::schema::metadata::RegisterInstrument req);
+    void processRequest(turbofw::schema::metadata::ServiceRequest req);
 };
 
 } // namespace app

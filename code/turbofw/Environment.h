@@ -183,9 +183,6 @@ public:
             return std::unexpected{e.what()};
         }
     }
-
-    void initLogger();
-    void shutdownLogger();
 };
 
 } // namespace turbofw

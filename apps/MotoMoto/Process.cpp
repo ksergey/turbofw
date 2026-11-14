@@ -47,8 +47,16 @@ void Process::run() {
 
     installDefaultSignalHandlers();
 
+    producer_.startHeartbeating();
+
     while (running_) {
         tq_info("running...");
+
+        consumer_.receive<Requests>([&]<typename M>(M req) {
+            this->processRequest(req);
+        });
+
+        producer_.keepAlive();
 
         std::this_thread::sleep_for(std::chrono::seconds{1});
 
@@ -57,12 +65,22 @@ void Process::run() {
         });
     }
 
+    producer_.startHeartbeating();
+
     removeDefaultSignalHandlers();
 }
 
 void Process::shutdown() {
     tq_notice("shutdown");
     running_ = false;
+}
+
+void Process::processRequest(turbofw::schema::metadata::RegisterInstrument req) {
+    (void)req;
+}
+
+void Process::processRequest(turbofw::schema::metadata::ServiceRequest req) {
+    (void)req;
 }
 
 } // namespace app
