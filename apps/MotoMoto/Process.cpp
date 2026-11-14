@@ -15,9 +15,9 @@
 
 namespace app {
 
-using turbofw::installSignalHandler;
+using turbofw::installDefaultSignalHandlers;
 using turbofw::processSignal;
-using turbofw::removeSignalHandler;
+using turbofw::removeDefaultSignalHandlers;
 
 Process::Process(Config const& config, Environment const& env) {
     auto const service = env.findService(config.service.name);
@@ -45,27 +45,19 @@ void Process::run() {
         return;
     }
 
-    for (int sigNum : {SIGINT, SIGTERM}) {
-        if (auto const result = installSignalHandler(sigNum); !result) {
-            tq_warn("failed to install signal handler for {} signal", sigNum);
-        }
-    }
+    installDefaultSignalHandlers();
 
     while (running_) {
         tq_info("running...");
 
+        std::this_thread::sleep_for(std::chrono::seconds{1});
+
         processSignal([&]([[maybe_unused]] int sigNo) {
             this->shutdown();
         });
-
-        std::this_thread::sleep_for(std::chrono::seconds{1});
     }
 
-    for (int sigNum : {SIGINT, SIGTERM}) {
-        if (auto const result = removeSignalHandler(sigNum); !result) {
-            tq_warn("failed to remove signal handler for {} signal", sigNum);
-        }
-    }
+    removeDefaultSignalHandlers();
 }
 
 void Process::shutdown() {
