@@ -20,7 +20,7 @@
 
 #include "Types.h"
 
-namespace turbofw::v2 {
+namespace turbofw {
 
 /// Process environment for a system of services.
 ///
@@ -39,7 +39,7 @@ namespace turbofw::v2 {
 /// sources are (in order): the vars passed to load, "${SCOPE}", the process environment.
 ///
 /// \see the accessors docblocks for the struct fields
-class Environment {
+class System {
 public:
     /// Extra variables for ${VAR} expansion, applied before the process environment
     using Vars = std::map<std::string, std::string, std::less<>>;
@@ -80,12 +80,12 @@ public:
     /// Load environment from a json string in memory
     /// \see the class docblock for what is validated
     [[nodiscard]] static auto loadFromJson(std::string_view content, Vars vars = {}) noexcept
-        -> std::expected<Environment, std::string>;
+        -> std::expected<System, std::string>;
 
     /// Load environment from a json config file
     /// \see the class docblock for what is validated
     [[nodiscard]] static auto loadFromFile(std::filesystem::path const& configPath, Vars vars = {}) noexcept
-        -> std::expected<Environment, std::string>;
+        -> std::expected<System, std::string>;
 
     /// Config scope: the name of the system/deployment all services of one system belong to;
     /// expanded (and charset-validated) on every call
@@ -104,10 +104,10 @@ public:
 
 private:
     /// Takes the parsed config. Throws std::runtime_error when the shape is invalid
-    Environment(nlohmann::json json, Vars vars);
+    System(nlohmann::json json, Vars vars);
 
     nlohmann::json json_;
     Vars vars_;
 };
 
-} // namespace turbofw::v2
+} // namespace turbofw

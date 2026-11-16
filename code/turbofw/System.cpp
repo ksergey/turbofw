@@ -1,7 +1,7 @@
 // Copyright (c) Sergey Kovalevich <inndie@gmail.com>
 // SPDX-License-Identifier: MIT
 
-#include "Environment_v2.h"
+#include "System.h"
 
 #include <algorithm>
 #include <concepts>
@@ -16,15 +16,15 @@
 
 #include <turbofw/config/ByteSize.h>
 
-namespace turbofw::v2 {
+namespace turbofw {
 
 namespace {
 
 // Expand "${VAR}" entries in input using @c vars, then the "${SCOPE}" variable (expanded from
 // the config scope), then process environment variables.
 // Throws std::runtime_error on unknown variable or bad syntax
-[[nodiscard]] auto expandVars(
-    std::string_view input, Environment::Vars const& vars, std::string_view rawScope, bool inScope) -> std::string {
+[[nodiscard]] auto expandVars(std::string_view input, System::Vars const& vars, std::string_view rawScope, bool inScope)
+    -> std::string {
     std::string result;
     result.reserve(input.size());
     for (std::size_t pos = 0; pos < input.size();) {
@@ -146,9 +146,9 @@ namespace {
 }
 
 // Queue memory source options: "memory-source" object with "path"/"page-size"; absent = defaults
-[[nodiscard]] auto parseMemorySourceOptions(nlohmann::json const& entry, std::string_view queueName,
-    auto const& expandVarsRef) -> Environment::MemorySourceOptions {
-    auto options = Environment::MemorySourceOptions{};
+[[nodiscard]] auto parseMemorySourceOptions(
+    nlohmann::json const& entry, std::string_view queueName, auto const& expandVarsRef) -> System::MemorySourceOptions {
+    auto options = System::MemorySourceOptions{};
     auto const* source = getOptional(entry, "memory-source");
     if (source == nullptr) {
         return options;
@@ -184,7 +184,7 @@ namespace {
 
 // Build a queue definition from a "queues" entry. Throws std::runtime_error
 [[nodiscard]] auto parseQueueDefinition(nlohmann::json const& entry, auto const& expandVarsRef)
-    -> Environment::QueueDefinition {
+    -> System::QueueDefinition {
     if (auto const* name = getOptional(entry, "name"); name == nullptr || !name->is_string()) {
         throw std::runtime_error{"queue entry: \"name\" must be a string"};
     }
@@ -205,9 +205,9 @@ namespace {
             throw std::runtime_error{
                 fmt::format("queue \"{}\": \"length\" and \"slot-size\" are only valid for \"mpsc\" queues", name)};
         }
-        return Environment::QueueDefinition{
+        return System::QueueDefinition{
             .name = name,
-            .type = Environment::QueueType::Multicast,
+            .type = System::QueueType::Multicast,
             .creationOptions{turboq::MulticastMessageQueue::CreationOptions{
                 .capacityHint = parseByteSize(*capacity, name, "capacity")}},
             .memorySourceOptions = parseMemorySourceOptions(entry, name, expandVarsRef),
@@ -230,9 +230,9 @@ namespace {
         if (lengthHint == 0) {
             throw std::runtime_error{fmt::format("queue \"{}\": \"length\" must be greater than zero", name)};
         }
-        return Environment::QueueDefinition{
+        return System::QueueDefinition{
             .name = name,
-            .type = Environment::QueueType::MPSC,
+            .type = System::QueueType::MPSC,
             .creationOptions{turboq::MPSCMessageQueue::CreationOptions{
                 .slotSizeHint = parseByteSize(*slotSize, name, "slot-size"), .lengthHint = lengthHint}},
             .memorySourceOptions = parseMemorySourceOptions(entry, name, expandVarsRef),
@@ -246,9 +246,9 @@ namespace {
             throw std::runtime_error{
                 fmt::format("queue \"{}\": \"length\" and \"slot-size\" are only valid for \"mpsc\" queues", name)};
         }
-        return Environment::QueueDefinition{
+        return System::QueueDefinition{
             .name = name,
-            .type = Environment::QueueType::SPSC,
+            .type = System::QueueType::SPSC,
             .creationOptions{
                 turboq::SPSCMessageQueue::CreationOptions{.capacityHint = parseByteSize(*capacity, name, "capacity")}},
             .memorySourceOptions = parseMemorySourceOptions(entry, name, expandVarsRef),
@@ -292,35 +292,34 @@ void validateShape(nlohmann::json const& json) {
 
 // --------------------------------------------------------------------------------------------
 
-auto Environment::loadFromJson(std::string_view content, Vars vars) noexcept
-    -> std::expected<Environment, std::string> {
+auto System::loadFromJson(std::string_view content, Vars vars) noexcept -> std::expected<System, std::string> {
     try {
         // ignore_comments: allow "//" comments in config files
-        return Environment{nlohmann::json::parse(content, nullptr, true, true), std::move(vars)};
+        return System{nlohmann::json::parse(content, nullptr, true, true), std::move(vars)};
     } catch (std::exception const& e) {
         return std::unexpected{fmt::format("can't load environment from json: {}", e.what())};
     }
 }
 
-auto Environment::loadFromFile(std::filesystem::path const& configPath, Vars vars) noexcept
-    -> std::expected<Environment, std::string> {
+auto System::loadFromFile(std::filesystem::path const& configPath, Vars vars) noexcept
+    -> std::expected<System, std::string> {
     try {
         auto stream = std::ifstream{configPath};
         if (!stream) {
             throw std::runtime_error{fmt::format("can't open config file \"{}\"", configPath.string())};
         }
         // ignore_comments: allow "//" comments in config files
-        return Environment{nlohmann::json::parse(stream, nullptr, true, true), std::move(vars)};
+        return System{nlohmann::json::parse(stream, nullptr, true, true), std::move(vars)};
     } catch (std::exception const& e) {
         return std::unexpected{fmt::format("can't load environment from \"{}\": {}", configPath.string(), e.what())};
     }
 }
 
-Environment::Environment(nlohmann::json json, Vars vars) : json_(std::move(json)), vars_(std::move(vars)) {
+System::System(nlohmann::json json, Vars vars) : json_(std::move(json)), vars_(std::move(vars)) {
     validateShape(json_);
 }
 
-auto Environment::scope() const -> std::expected<std::string, std::string> {
+auto System::scope() const -> std::expected<std::string, std::string> {
     try {
         auto const rawScope = json_.at("scope").get_ref<std::string const&>();
         auto const value = expandVars(rawScope, vars_, rawScope, false);
@@ -337,8 +336,8 @@ auto Environment::scope() const -> std::expected<std::string, std::string> {
 namespace {
 
 // The "queues" section reader; shared by queues() and services() (role queues resolve here)
-[[nodiscard]] auto parseQueues(nlohmann::json const& json, Environment::Vars const& vars)
-    -> std::vector<Environment::QueueDefinition> {
+[[nodiscard]] auto parseQueues(nlohmann::json const& json, System::Vars const& vars)
+    -> std::vector<System::QueueDefinition> {
     static auto const emptyArray = nlohmann::json::array();
     auto const& entries = json.contains("queues") ? json.at("queues") : emptyArray;
 
@@ -347,7 +346,7 @@ namespace {
         return expandVars(input, vars, rawScope, false);
     };
 
-    auto result = std::vector<Environment::QueueDefinition>{};
+    auto result = std::vector<System::QueueDefinition>{};
     result.reserve(entries.size());
     for (auto const& entry : entries) {
         auto definition = parseQueueDefinition(entry, expandVarsRef);
@@ -362,8 +361,8 @@ namespace {
 }
 
 // The "services" section reader; role queue names resolve against @c queues
-[[nodiscard]] auto parseServices(nlohmann::json const& json, Environment::Vars const& vars,
-    std::vector<Environment::QueueDefinition> const& queues) -> std::vector<Environment::ServiceDefinition> {
+[[nodiscard]] auto parseServices(nlohmann::json const& json, System::Vars const& vars,
+    std::vector<System::QueueDefinition> const& queues) -> std::vector<System::ServiceDefinition> {
     static auto const emptyArray = nlohmann::json::array();
     auto const& entries = json.contains("services") ? json.at("services") : emptyArray;
 
@@ -372,7 +371,7 @@ namespace {
         return expandVars(input, vars, rawScope, false);
     };
 
-    auto result = std::vector<Environment::ServiceDefinition>{};
+    auto result = std::vector<System::ServiceDefinition>{};
     result.reserve(entries.size());
     for (auto const& entry : entries) {
         auto const* name = getOptional(entry, "name");
@@ -404,7 +403,7 @@ namespace {
         if (roleQueues == nullptr || !roleQueues->is_object()) {
             throw std::runtime_error{fmt::format("service \"{}\": \"queues\" must be an object", value)};
         }
-        auto definition = Environment::ServiceDefinition{
+        auto definition = System::ServiceDefinition{
             .name = value,
             .serviceId = ServiceId{static_cast<std::uint16_t>(rawServiceId)},
             .queues{},
@@ -448,7 +447,7 @@ namespace {
 
 } // namespace
 
-auto Environment::queues() const -> std::expected<std::vector<QueueDefinition>, std::string> {
+auto System::queues() const -> std::expected<std::vector<QueueDefinition>, std::string> {
     try {
         return parseQueues(json_, vars_);
     } catch (std::exception const& e) {
@@ -456,7 +455,7 @@ auto Environment::queues() const -> std::expected<std::vector<QueueDefinition>, 
     }
 }
 
-auto Environment::services() const -> std::expected<std::vector<ServiceDefinition>, std::string> {
+auto System::services() const -> std::expected<std::vector<ServiceDefinition>, std::string> {
     try {
         auto const queues = parseQueues(json_, vars_);
         return parseServices(json_, vars_, queues);
@@ -465,7 +464,7 @@ auto Environment::services() const -> std::expected<std::vector<ServiceDefinitio
     }
 }
 
-auto Environment::findService(std::string_view name) const -> std::expected<ServiceDefinition, std::string> {
+auto System::findService(std::string_view name) const -> std::expected<ServiceDefinition, std::string> {
     try {
         auto const queues = parseQueues(json_, vars_);
         auto const services = parseServices(json_, vars_, queues);
@@ -482,4 +481,4 @@ auto Environment::findService(std::string_view name) const -> std::expected<Serv
     }
 }
 
-} // namespace turbofw::v2
+} // namespace turbofw
