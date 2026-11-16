@@ -16,18 +16,10 @@ CPMAddPackage("gh:doctest/doctest@2.5.3")
 CPMAddPackage("gh:fmtlib/fmt#12.2.0")
 CPMAddPackage("gh:jarro2783/cxxopts@3.3.1")
 CPMAddPackage("gh:rollbear/strong_type@16")
-# the repo tags its releases without the "v" prefix, which the shorthand form would add
-CPMAddPackage(
-    NAME sqlite-amalgamation
-    GITHUB_REPOSITORY azadkuh/sqlite-amalgamation
-    GIT_TAG 3.38.2
-)
 
 if (turbofw_BUILD_BENCHMARKS)
     CPMAddPackage(
-        NAME benchmark
-        GITHUB_REPOSITORY google/benchmark
-        VERSION 1.10.0
+        URI "gh:google/benchmark@1.10.0"
         OPTIONS "BENCHMARK_ENABLE_TESTING OFF"
     )
 endif()
@@ -36,16 +28,8 @@ endif()
 CPMAddPackage("gh:ksergey/turboq#master")
 CPMAddPackage("gh:ksergey/turboq-reactor#master")
 CPMAddPackage("gh:ksergey/turboq-logger#master")
+CPMAddPackage("gh:ksergey/sbe-code-gen#master")
 CPMAddPackage("gh:ksergey/xxx#master")
-
-# turbofw_SBE_CODE_GEN=/path/to/sbe-code-gen points CPM at a local checkout of
-# the generator instead of gh:ksergey/sbe-code-gen#master (local development)
-set(turbofw_SBE_CODE_GEN "" CACHE PATH "Local sbe-code-gen checkout to use instead of gh:ksergey/sbe-code-gen#master")
-if (turbofw_SBE_CODE_GEN)
-    CPMAddPackage(NAME sbe-code-gen SOURCE_DIR ${turbofw_SBE_CODE_GEN})
-else()
-    CPMAddPackage("gh:ksergey/sbe-code-gen#master")
-endif()
 
 if (turbofw_BUILD_TESTS)
     enable_testing()
