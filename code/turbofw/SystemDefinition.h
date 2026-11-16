@@ -22,6 +22,39 @@
 
 namespace turbofw {
 
+enum class QueueType { Multicast, MPSC, SPSC };
+
+// clang-format off
+using CreationOptions = std::variant<
+    turboq::MulticastMessageQueue::CreationOptions,
+    turboq::MPSCMessageQueue::CreationOptions,
+    turboq::SPSCMessageQueue::CreationOptions
+>;
+// clang-format on
+
+struct MemorySourceOptions {
+    /// Where the queue files are created
+    std::filesystem::path path{"/dev/shm"};
+    /// Page size for the queue file mappings
+    std::size_t pageSize{4096};
+};
+
+/// A queue definition
+struct QueueDefinition {
+    std::string name;
+    QueueType type; // TODO: could be removed because CreationOptions point to exactly queue type?
+    CreationOptions creationOptions;
+    MemorySourceOptions memorySourceOptions;
+};
+
+/// A service definition
+struct ServiceDefinition {
+    std::string name;
+    ServiceId serviceId;
+    std::map<std::string, QueueDefinition> queues;
+    std::filesystem::path workingDirectory;
+};
+
 /// Process environment for a system of services.
 ///
 /// Unlike turbofw::Environment (v1), which fully expands and validates the config at load, this
@@ -39,53 +72,20 @@ namespace turbofw {
 /// sources are (in order): the vars passed to load, "${SCOPE}", the process environment.
 ///
 /// \see the accessors docblocks for the struct fields
-class System {
+class SystemDefinition {
 public:
     /// Extra variables for ${VAR} expansion, applied before the process environment
     using Vars = std::map<std::string, std::string, std::less<>>;
 
-    enum class QueueType { Multicast, MPSC, SPSC };
-
-    // clang-format off
-    using CreationOptions = std::variant<
-        turboq::MulticastMessageQueue::CreationOptions,
-        turboq::MPSCMessageQueue::CreationOptions,
-        turboq::SPSCMessageQueue::CreationOptions
-    >;
-    // clang-format on
-
-    struct MemorySourceOptions {
-        /// Where the queue files are created
-        std::filesystem::path path{"/dev/shm"};
-        /// Page size for the queue file mappings
-        std::size_t pageSize{4096};
-    };
-
-    /// A queue definition
-    struct QueueDefinition {
-        std::string name;
-        QueueType type; // TODO: could be removed because CreationOptions point to exactly queue type?
-        CreationOptions creationOptions;
-        MemorySourceOptions memorySourceOptions;
-    };
-
-    /// A service definition
-    struct ServiceDefinition {
-        std::string name;
-        ServiceId serviceId;
-        std::map<std::string, QueueDefinition> queues;
-        std::filesystem::path workingDirectory;
-    };
-
     /// Load environment from a json string in memory
     /// \see the class docblock for what is validated
     [[nodiscard]] static auto loadFromJson(std::string_view content, Vars vars = {}) noexcept
-        -> std::expected<System, std::string>;
+        -> std::expected<SystemDefinition, std::string>;
 
     /// Load environment from a json config file
     /// \see the class docblock for what is validated
     [[nodiscard]] static auto loadFromFile(std::filesystem::path const& configPath, Vars vars = {}) noexcept
-        -> std::expected<System, std::string>;
+        -> std::expected<SystemDefinition, std::string>;
 
     /// Config scope: the name of the system/deployment all services of one system belong to;
     /// expanded (and charset-validated) on every call
@@ -104,7 +104,7 @@ public:
 
 private:
     /// Takes the parsed config. Throws std::runtime_error when the shape is invalid
-    System(nlohmann::json json, Vars vars);
+    SystemDefinition(nlohmann::json json, Vars vars);
 
     nlohmann::json json_;
     Vars vars_;
