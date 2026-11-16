@@ -60,10 +60,10 @@ struct ServiceDefinition {
 
 /// Process environment for a system of services.
 ///
-/// Unlike turbofw::Environment (v1), which fully expands and validates the config at load, this
-/// one keeps the config as json and reads it on every call: "${VAR}" entries are expanded and
-/// values are built into structs at the moment of the call, so variable changes (vars or the
-/// process environment) are picked up without a reload.
+/// The config is kept as json and read on every call: "${VAR}" entries are expanded and values
+/// are built into structs at the moment of the call, so variable changes (vars or the process
+/// environment) are picked up without a reload. The actual queue creation happens in
+/// turbofw::Environment built from a ServiceDefinition.
 ///
 /// Validation happens only at load: the config must be a json object with a "scope" (non-empty
 /// string) section; "queues" and "services" are optional arrays: absent = empty.

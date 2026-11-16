@@ -10,6 +10,7 @@
 
 #include <turbofw/Environment.h>
 #include <turbofw/ProducerConsumerTraits.h>
+#include <turbofw/SystemDefinition.h>
 #include <turbofw/Types.h>
 #include <turbofw/mixin/SBEReceiveMixin.h>
 #include <turbofw/schema/service/Heartbeat.h>
@@ -43,12 +44,21 @@ int main(int argc, char* argv[]) {
             throw std::runtime_error{"option '-env' is mandatory"};
         }
 
-        auto const env = turbofw::Environment::loadFromFile(parseResult["env"].as<std::filesystem::path>());
+        auto const sys = turbofw::SystemDefinition::loadFromFile(parseResult["env"].as<std::filesystem::path>());
+        if (!sys) {
+            throw std::runtime_error{sys.error()};
+        }
+        auto services = sys->services();
+        if (!services) {
+            throw std::runtime_error{services.error()};
+        }
+
+        auto const env = turbofw::Environment::create(std::move(services->at(0)));
         if (!env) {
             throw std::runtime_error{env.error()};
         }
 
-        auto consumer = env->createConsumer<Consumer>("heartbeat@data");
+        auto consumer = env->createConsumer<Consumer>("data");
         if (!consumer) {
             throw std::runtime_error{consumer.error()};
         }

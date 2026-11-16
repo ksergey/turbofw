@@ -11,6 +11,7 @@
 #include <turbofw/Clock.h>
 #include <turbofw/Environment.h>
 #include <turbofw/ProducerConsumerTraits.h>
+#include <turbofw/SystemDefinition.h>
 #include <turbofw/mixin/SBESendMixin.h>
 #include <turbofw/mixin/SBEServiceIdStampMixin.h>
 #include <turbofw/schema/service/Heartbeat.h>
@@ -46,12 +47,21 @@ int main(int argc, char* argv[]) {
             throw std::runtime_error{"option '-env' is mandatory"};
         }
 
-        auto const env = turbofw::Environment::loadFromFile(parseResult["env"].as<std::filesystem::path>());
+        auto const sys = turbofw::SystemDefinition::loadFromFile(parseResult["env"].as<std::filesystem::path>());
+        if (!sys) {
+            throw std::runtime_error{sys.error()};
+        }
+        auto services = sys->services();
+        if (!services) {
+            throw std::runtime_error{services.error()};
+        }
+
+        auto const env = turbofw::Environment::create(std::move(services->at(0)));
         if (!env) {
             throw std::runtime_error{env.error()};
         }
 
-        auto producer = env->createProducer<Producer>("heartbeat@data", false);
+        auto producer = env->createProducer<Producer>("data", false);
         if (!producer) {
             throw std::runtime_error{producer.error()};
         }

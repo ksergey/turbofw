@@ -19,21 +19,15 @@ using turbofw::installDefaultSignalHandlers;
 using turbofw::processSignal;
 using turbofw::removeDefaultSignalHandlers;
 
-Process::Process(Config const& config, Environment const& env) {
-    auto const service = env.findService(config.service.name);
-    if (!service) {
-        throw std::runtime_error{
-            std::format("service \"{}\" is not configured in the environment", config.service.name)};
-    }
-
-    auto producer = env.createProducer<Producer>(service->queues.at("data"), false);
+Process::Process(Environment const& env) {
+    auto producer = env.createProducer<Producer>("data", false);
     if (!producer) {
         throw std::runtime_error{producer.error()};
     }
     producer_ = std::move(producer).value();
-    producer_.setServiceId(ServiceId{service->serviceId});
+    producer_.setServiceId(env.serviceId());
 
-    auto consumer = env.createConsumer<Consumer>(service->queues.at("cmd"), false);
+    auto consumer = env.createConsumer<Consumer>("cmd", false);
     if (!consumer) {
         throw std::runtime_error{consumer.error()};
     }

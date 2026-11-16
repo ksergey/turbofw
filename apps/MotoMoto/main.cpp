@@ -1,6 +1,7 @@
 // Copyright (c) Sergey Kovalevich <inndie@gmail.com>
 // SPDX-License-Identifier: MIT
 
+#include <algorithm>
 #include <filesystem>
 #include <format>
 #include <print>
@@ -8,6 +9,7 @@
 #include <cxxopts.hpp>
 
 #include <turbofw/Logging.h>
+#include <turbofw/SystemDefinition.h>
 
 #include "Config.h"
 #include "Process.h"
@@ -15,7 +17,6 @@
 int main(int argc, char* argv[]) {
     using namespace app;
 
-    using turbofw::Environment;
     using turbofw::initLoggerDailyFile;
     using turbofw::initLoggerStdOut;
     using turbofw::logLevelFromString;
@@ -55,7 +56,24 @@ int main(int argc, char* argv[]) {
         if (!parseResult.count("env")) {
             throw std::runtime_error{"option '--env' is mandatory"};
         }
-        auto const env = Environment::loadFromFile(parseResult["env"].as<std::filesystem::path>());
+        auto const sys = turbofw::SystemDefinition::loadFromFile(parseResult["env"].as<std::filesystem::path>());
+        if (!sys) {
+            throw std::runtime_error{sys.error()};
+        }
+
+        // The environment of this service
+        auto const services = sys->services();
+        if (!services) {
+            throw std::runtime_error{services.error()};
+        }
+        auto const found = std::ranges::find_if(*services, [&](auto const& service) {
+            return service.name == config->service.name;
+        });
+        if (found == services->end()) {
+            throw std::runtime_error{
+                std::format("service \"{}\" is not configured in the environment", config->service.name)};
+        }
+        auto const env = turbofw::Environment::create(std::move(*found));
         if (!env) {
             throw std::runtime_error{env.error()};
         }
@@ -71,7 +89,7 @@ int main(int argc, char* argv[]) {
         }
 
         // Run process loop
-        Process{*config, *env}.run();
+        Process{*env}.run();
 
         shutdownLogger();
 
