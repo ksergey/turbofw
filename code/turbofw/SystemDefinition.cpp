@@ -481,4 +481,15 @@ auto SystemDefinition::findService(std::string_view name) const -> std::expected
     }
 }
 
+auto format_as(QueueType type) noexcept -> std::string_view {
+    using namespace std::string_view_literals;
+
+    switch (type) {
+    case QueueType::Multicast: return "multicast"sv;
+    case QueueType::MPSC: return "mpsc"sv;
+    case QueueType::SPSC: return "spsc"sv;
+    }
+    return "unknown"sv;
+}
+
 } // namespace turbofw

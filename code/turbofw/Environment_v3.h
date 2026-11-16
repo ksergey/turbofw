@@ -7,11 +7,13 @@
 #include <map>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <type_traits>
 #include <utility>
 
 #include <turboq/MPSCMessageQueue.h>
 #include <turboq/MulticastMessageQueue.h>
+#include <turboq/Platform.h>
 #include <turboq/SPSCMessageQueue.h>
 
 #include "SystemDefinition.h"
@@ -33,7 +35,8 @@ namespace turbofw::v3 {
 /// constructible from the base instance (a thin wrapper of the tiny impl), e.g.
 /// \code{.cpp}
 /// struct MyProducer : turboq::MulticastMessageQueue::Producer {
-///     using turboq::MulticastMessageQueue::Producer::Producer;
+///     explicit MyProducer(turboq::MulticastMessageQueue::Producer&& base)
+///         : turboq::MulticastMessageQueue::Producer(std::move(base)) {}
 ///     // mixins and message code here
 /// };
 /// \endcode
@@ -66,79 +69,146 @@ public:
         return definition_.workingDirectory;
     }
 
-    /// Create (or open only) the role queue and wrap its producer into @c Producer.
+    /// Create a multicast producer (opens-or-creates the role queue first).
+    /// @tparam Producer is a type derived from the corresponding turboq producer type;
+    /// it must be constructible from the base producer instance (a thin wrapper of the tiny impl),
+    /// \see the class docblock for an example
     /// @param openOnly when true, opens the queue only (fails if not created yet), without
     ///                 creating the memory source directories; otherwise opens-or-creates with
-    ///                 the creation options from the definition
+    ///                 the creation options from the definition.
+    ///                 The queue (and its single-producer lock) stays open for the environment lifetime, which
+    ///                 is what makes the single-producer guarantee hold; the environment must outlive the producer
     template <typename Producer>
-        requires std::is_base_of_v<turboq::MulticastMessageQueue::Producer, Producer> ||
-                 std::is_base_of_v<turboq::MPSCMessageQueue::Producer, Producer> ||
-                 std::is_base_of_v<turboq::SPSCMessageQueue::Producer, Producer>
-    [[nodiscard]] auto createProducer(std::string_view role, bool openOnly = false) const noexcept
+        requires std::is_base_of_v<turboq::MulticastMessageQueue::Producer, Producer>
+    [[nodiscard]] TURBOQ_FORCE_INLINE auto createProducer(std::string_view role, bool openOnly = true) const noexcept
         -> std::expected<Producer, std::string> {
-        auto const* definition = findRoleQueue(role);
-        if (definition == nullptr) {
-            return std::unexpected{
-                fmt::format("role \"{}\" is not configured for service \"{}\"", role, definition_.name)};
-        }
-        if constexpr (std::is_base_of_v<turboq::MulticastMessageQueue::Producer, Producer>) {
-            if (definition->type != turbofw::QueueType::Multicast) {
-                return std::unexpected{
-                    fmt::format("queue \"{}\" (role \"{}\") is not a multicast queue", definition->name, role)};
-            }
-            return openQueue<turboq::MulticastMessageQueue, Producer, true>(*definition, openOnly);
-        } else if constexpr (std::is_base_of_v<turboq::MPSCMessageQueue::Producer, Producer>) {
-            if (definition->type != turbofw::QueueType::MPSC) {
-                return std::unexpected{
-                    fmt::format("queue \"{}\" (role \"{}\") is not an mpsc queue", definition->name, role)};
-            }
-            return openQueue<turboq::MPSCMessageQueue, Producer, true>(*definition, openOnly);
-        } else {
-            if (definition->type != turbofw::QueueType::SPSC) {
-                return std::unexpected{
-                    fmt::format("queue \"{}\" (role \"{}\") is not an spsc queue", definition->name, role)};
-            }
-            return openQueue<turboq::SPSCMessageQueue, Producer, true>(*definition, openOnly);
+        try {
+            return getQueue<turboq::MulticastMessageQueue>(role, openOnly)
+                .transform([](turboq::MulticastMessageQueue queue) {
+                    return Producer{queue.createProducer()};
+                });
+        } catch (std::exception const& e) {
+            return std::unexpected{e.what()};
         }
     }
 
-    /// Create (or open only) the role queue and wrap its consumer into @c Consumer
-    /// \see createProducer() for the parameters
+    /// Create a multicast consumer, see createProducer() for template/param docs
     template <typename Consumer>
-        requires std::is_base_of_v<turboq::MulticastMessageQueue::Consumer, Consumer> ||
-                 std::is_base_of_v<turboq::MPSCMessageQueue::Consumer, Consumer> ||
-                 std::is_base_of_v<turboq::SPSCMessageQueue::Consumer, Consumer>
-    [[nodiscard]] auto createConsumer(std::string_view role, bool openOnly = false) const noexcept
+        requires std::is_base_of_v<turboq::MulticastMessageQueue::Consumer, Consumer>
+    [[nodiscard]] TURBOQ_FORCE_INLINE auto createConsumer(std::string_view role, bool openOnly = true) const noexcept
         -> std::expected<Consumer, std::string> {
-        auto const* definition = findRoleQueue(role);
-        if (definition == nullptr) {
-            return std::unexpected{
-                fmt::format("role \"{}\" is not configured for service \"{}\"", role, definition_.name)};
+        try {
+            return getQueue<turboq::MulticastMessageQueue>(role, openOnly)
+                .transform([](turboq::MulticastMessageQueue queue) {
+                    return Consumer{queue.createConsumer()};
+                });
+        } catch (std::exception const& e) {
+            return std::unexpected{e.what()};
         }
-        if constexpr (std::is_base_of_v<turboq::MulticastMessageQueue::Consumer, Consumer>) {
-            if (definition->type != turbofw::QueueType::Multicast) {
-                return std::unexpected{
-                    fmt::format("queue \"{}\" (role \"{}\") is not a multicast queue", definition->name, role)};
-            }
-            return openQueue<turboq::MulticastMessageQueue, Consumer, false>(*definition, openOnly);
-        } else if constexpr (std::is_base_of_v<turboq::MPSCMessageQueue::Consumer, Consumer>) {
-            if (definition->type != turbofw::QueueType::MPSC) {
-                return std::unexpected{
-                    fmt::format("queue \"{}\" (role \"{}\") is not an mpsc queue", definition->name, role)};
-            }
-            return openQueue<turboq::MPSCMessageQueue, Consumer, false>(*definition, openOnly);
-        } else {
-            if (definition->type != turbofw::QueueType::SPSC) {
-                return std::unexpected{
-                    fmt::format("queue \"{}\" (role \"{}\") is not an spsc queue", definition->name, role)};
-            }
-            return openQueue<turboq::SPSCMessageQueue, Consumer, false>(*definition, openOnly);
+    }
+
+    /// Create an mpsc producer, see createProducer() for template/param docs
+    template <typename Producer>
+        requires std::is_base_of_v<turboq::MPSCMessageQueue::Producer, Producer>
+    [[nodiscard]] TURBOQ_FORCE_INLINE auto createProducer(std::string_view role, bool openOnly = true) const noexcept
+        -> std::expected<Producer, std::string> {
+        try {
+            return getQueue<turboq::MPSCMessageQueue>(role, openOnly).transform([](turboq::MPSCMessageQueue queue) {
+                return Producer{queue.createProducer()};
+            });
+        } catch (std::exception const& e) {
+            return std::unexpected{e.what()};
+        }
+    }
+
+    /// Create the (single) mpsc consumer, see createProducer() for template/param docs
+    template <typename Consumer>
+        requires std::is_base_of_v<turboq::MPSCMessageQueue::Consumer, Consumer>
+    [[nodiscard]] TURBOQ_FORCE_INLINE auto createConsumer(std::string_view role, bool openOnly = true) const noexcept
+        -> std::expected<Consumer, std::string> {
+        try {
+            return getQueue<turboq::MPSCMessageQueue>(role, openOnly).transform([](turboq::MPSCMessageQueue queue) {
+                return Consumer{queue.createConsumer()};
+            });
+        } catch (std::exception const& e) {
+            return std::unexpected{e.what()};
+        }
+    }
+
+    /// Create an spsc producer, see createProducer() for template/param docs
+    template <typename Producer>
+        requires std::is_base_of_v<turboq::SPSCMessageQueue::Producer, Producer>
+    [[nodiscard]] TURBOQ_FORCE_INLINE auto createProducer(std::string_view role, bool openOnly = true) const noexcept
+        -> std::expected<Producer, std::string> {
+        try {
+            return getQueue<turboq::SPSCMessageQueue>(role, openOnly).transform([](turboq::SPSCMessageQueue queue) {
+                return Producer{queue.createProducer()};
+            });
+        } catch (std::exception const& e) {
+            return std::unexpected{e.what()};
+        }
+    }
+
+    /// Create the (single) spsc consumer, see createProducer() for template/param docs
+    template <typename Consumer>
+        requires std::is_base_of_v<turboq::SPSCMessageQueue::Consumer, Consumer>
+    [[nodiscard]] TURBOQ_FORCE_INLINE auto createConsumer(std::string_view role, bool openOnly = true) const noexcept
+        -> std::expected<Consumer, std::string> {
+        try {
+            return getQueue<turboq::SPSCMessageQueue>(role, openOnly).transform([](turboq::SPSCMessageQueue queue) {
+                return Consumer{queue.createConsumer()};
+            });
+        } catch (std::exception const& e) {
+            return std::unexpected{e.what()};
         }
     }
 
 private:
     /// Takes an already validated definition
     explicit Environment(turbofw::ServiceDefinition definition) noexcept : definition_{std::move(definition)} {}
+
+    /// Open (or open only) the role queue of the given family; the role queue type must match
+    template <typename Q>
+        requires std::is_same_v<Q, turboq::MulticastMessageQueue> || std::is_same_v<Q, turboq::MPSCMessageQueue> ||
+                 std::is_same_v<Q, turboq::SPSCMessageQueue>
+    [[nodiscard]] auto getQueue(std::string_view role, bool openOnly) const noexcept -> std::expected<Q, std::string> {
+        constexpr auto queueType = [] {
+            if constexpr (std::is_same_v<Q, turboq::MulticastMessageQueue>) {
+                return turbofw::QueueType::Multicast;
+            } else if constexpr (std::is_same_v<Q, turboq::MPSCMessageQueue>) {
+                return turbofw::QueueType::MPSC;
+            } else if constexpr (std::is_same_v<Q, turboq::SPSCMessageQueue>) {
+                return turbofw::QueueType::SPSC;
+            }
+        }();
+
+        auto const* definition = findRoleQueue(role);
+        if (definition == nullptr) {
+            return std::unexpected{fmt::format("{} queue (role \"{}\") not found", queueType, role)};
+        }
+        if (definition->type != queueType) {
+            return std::unexpected{
+                fmt::format("{} queue \"{}\" (role \"{}\") not found", queueType, definition->name, role)};
+        }
+
+        auto const source = makeMemorySource(*definition, !openOnly);
+        if (!source) {
+            return std::unexpected{std::move(source).error()};
+        }
+
+        auto const createQueue = [&] {
+            if (openOnly) {
+                return Q::makeQueue(definition->name, *source);
+            } else {
+                return Q::makeQueue(
+                    definition->name, *std::get_if<typename Q::CreationOptions>(&definition->creationOptions), *source);
+            }
+        };
+
+        return createQueue().transform_error([&](std::error_code const& ec) {
+            return fmt::format("failed to get {} queue \"{}\" ({})", queueType, definition->name, ec.message());
+        });
+    }
 
     /// The role queue definition, nullptr when the role is not configured
     [[nodiscard]] auto findRoleQueue(std::string_view role) const noexcept -> turbofw::QueueDefinition const*;
@@ -147,40 +217,6 @@ private:
     /// directories are created first
     [[nodiscard]] auto makeMemorySource(turbofw::QueueDefinition const& definition, bool createDirectories) const
         -> std::expected<turboq::DefaultMemorySource, std::string>;
-
-    /// Open (or create) the queue of a definition and wrap its producer/consumer into @c Wrapper
-    template <typename Q, typename Wrapper, bool IsProducer>
-    [[nodiscard]] auto openQueue(turbofw::QueueDefinition const& definition, bool openOnly) const noexcept
-        -> std::expected<Wrapper, std::string> {
-        try {
-            auto sourceResult = makeMemorySource(definition, !openOnly);
-            if (!sourceResult) {
-                return std::unexpected{std::move(sourceResult).error()};
-            }
-            auto queue = [&] {
-                if (openOnly) {
-                    return Q::makeQueue(definition.name, *sourceResult);
-                }
-                auto const* options = std::get_if<typename Q::CreationOptions>(&definition.creationOptions);
-                if (options == nullptr) {
-                    throw std::runtime_error{
-                        fmt::format("queue \"{}\": creation options do not match its type", definition.name)};
-                }
-                return Q::makeQueue(definition.name, *options, *sourceResult);
-            }();
-            if (!queue) {
-                return std::unexpected{fmt::format("failed to {} queue \"{}\" ({})", openOnly ? "open" : "create",
-                    definition.name, queue.error().message())};
-            }
-            if constexpr (IsProducer) {
-                return Wrapper{queue->createProducer()};
-            } else {
-                return Wrapper{queue->createConsumer()};
-            }
-        } catch (std::exception const& e) {
-            return std::unexpected{e.what()};
-        }
-    }
 
     turbofw::ServiceDefinition definition_;
 };

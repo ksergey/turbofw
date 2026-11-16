@@ -24,6 +24,9 @@ namespace turbofw {
 
 enum class QueueType { Multicast, MPSC, SPSC };
 
+/// fmt::format helper for QueueType
+auto format_as(QueueType type) noexcept -> std::string_view;
+
 // clang-format off
 using CreationOptions = std::variant<
     turboq::MulticastMessageQueue::CreationOptions,
