@@ -56,18 +56,18 @@ void validateCreationOptions(turbofw::QueueDefinition const& definition) {
         }
     };
     switch (definition.type) {
-    case turbofw::QueueType::Multicast:
+    case turbofw::QueueDefinition::QueueType::Multicast:
         checkHint(
             std::get_if<turboq::MulticastMessageQueue::CreationOptions>(&definition.creationOptions)->capacityHint,
             "capacity");
         break;
-    case turbofw::QueueType::MPSC: {
+    case turbofw::QueueDefinition::QueueType::MPSC: {
         auto const* options = std::get_if<turboq::MPSCMessageQueue::CreationOptions>(&definition.creationOptions);
         checkHint(options->slotSizeHint, "slot-size");
         checkHint(options->lengthHint, "length");
         break;
     }
-    case turbofw::QueueType::SPSC:
+    case turbofw::QueueDefinition::QueueType::SPSC:
         checkHint(std::get_if<turboq::SPSCMessageQueue::CreationOptions>(&definition.creationOptions)->capacityHint,
             "capacity");
         break;

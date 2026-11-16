@@ -146,9 +146,9 @@ namespace {
 }
 
 // Queue memory source options: "memory-source" object with "path"/"page-size"; absent = defaults
-[[nodiscard]] auto parseMemorySourceOptions(
-    nlohmann::json const& entry, std::string_view queueName, auto const& expandVarsRef) -> MemorySourceOptions {
-    auto options = MemorySourceOptions{};
+[[nodiscard]] auto parseMemorySourceOptions(nlohmann::json const& entry, std::string_view queueName,
+    auto const& expandVarsRef) -> QueueDefinition::MemorySourceOptions {
+    auto options = QueueDefinition::MemorySourceOptions{};
     auto const* source = getOptional(entry, "memory-source");
     if (source == nullptr) {
         return options;
@@ -206,7 +206,7 @@ namespace {
         }
         return QueueDefinition{
             .name = name,
-            .type = QueueType::Multicast,
+            .type = QueueDefinition::QueueType::Multicast,
             .creationOptions{turboq::MulticastMessageQueue::CreationOptions{
                 .capacityHint = parseByteSize(*capacity, name, "capacity")}},
             .memorySourceOptions = parseMemorySourceOptions(entry, name, expandVarsRef),
@@ -231,7 +231,7 @@ namespace {
         }
         return QueueDefinition{
             .name = name,
-            .type = QueueType::MPSC,
+            .type = QueueDefinition::QueueType::MPSC,
             .creationOptions{turboq::MPSCMessageQueue::CreationOptions{
                 .slotSizeHint = parseByteSize(*slotSize, name, "slot-size"), .lengthHint = lengthHint}},
             .memorySourceOptions = parseMemorySourceOptions(entry, name, expandVarsRef),
@@ -247,7 +247,7 @@ namespace {
         }
         return QueueDefinition{
             .name = name,
-            .type = QueueType::SPSC,
+            .type = QueueDefinition::QueueType::SPSC,
             .creationOptions{
                 turboq::SPSCMessageQueue::CreationOptions{.capacityHint = parseByteSize(*capacity, name, "capacity")}},
             .memorySourceOptions = parseMemorySourceOptions(entry, name, expandVarsRef),
@@ -479,17 +479,6 @@ auto SystemDefinition::findService(std::string_view name) const -> std::expected
     } catch (std::exception const& e) {
         return std::unexpected{e.what()};
     }
-}
-
-auto format_as(QueueType type) noexcept -> std::string_view {
-    using namespace std::string_view_literals;
-
-    switch (type) {
-    case QueueType::Multicast: return "multicast"sv;
-    case QueueType::MPSC: return "mpsc"sv;
-    case QueueType::SPSC: return "spsc"sv;
-    }
-    return "unknown"sv;
 }
 
 } // namespace turbofw

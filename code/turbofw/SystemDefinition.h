@@ -3,60 +3,18 @@
 
 #pragma once
 
-#include <cstddef>
 #include <expected>
 #include <filesystem>
 #include <map>
 #include <string>
 #include <string_view>
-#include <variant>
 #include <vector>
 
 #include <nlohmann/json.hpp>
 
-#include <turboq/MPSCMessageQueue.h>
-#include <turboq/MulticastMessageQueue.h>
-#include <turboq/SPSCMessageQueue.h>
-
-#include "Types.h"
+#include "ServiceDefinition.h"
 
 namespace turbofw {
-
-enum class QueueType { Multicast, MPSC, SPSC };
-
-/// fmt::format helper for QueueType
-auto format_as(QueueType type) noexcept -> std::string_view;
-
-// clang-format off
-using CreationOptions = std::variant<
-    turboq::MulticastMessageQueue::CreationOptions,
-    turboq::MPSCMessageQueue::CreationOptions,
-    turboq::SPSCMessageQueue::CreationOptions
->;
-// clang-format on
-
-struct MemorySourceOptions {
-    /// Where the queue files are created
-    std::filesystem::path path{"/dev/shm"};
-    /// Page size for the queue file mappings
-    std::size_t pageSize{4096};
-};
-
-/// A queue definition
-struct QueueDefinition {
-    std::string name;
-    QueueType type; // TODO: could be removed because CreationOptions point to exactly queue type?
-    CreationOptions creationOptions;
-    MemorySourceOptions memorySourceOptions;
-};
-
-/// A service definition
-struct ServiceDefinition {
-    std::string name;
-    ServiceId serviceId;
-    std::map<std::string, QueueDefinition> queues;
-    std::filesystem::path workingDirectory;
-};
 
 /// Process environment for a system of services.
 ///

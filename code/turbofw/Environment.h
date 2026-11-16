@@ -16,7 +16,7 @@
 #include <turboq/Platform.h>
 #include <turboq/SPSCMessageQueue.h>
 
-#include "SystemDefinition.h"
+#include "ServiceDefinition.h"
 
 namespace turbofw {
 
@@ -172,11 +172,11 @@ private:
     [[nodiscard]] auto getQueue(std::string_view role, bool openOnly) const noexcept -> std::expected<Q, std::string> {
         constexpr auto queueType = [] {
             if constexpr (std::is_same_v<Q, turboq::MulticastMessageQueue>) {
-                return turbofw::QueueType::Multicast;
+                return turbofw::QueueDefinition::QueueType::Multicast;
             } else if constexpr (std::is_same_v<Q, turboq::MPSCMessageQueue>) {
-                return turbofw::QueueType::MPSC;
+                return turbofw::QueueDefinition::QueueType::MPSC;
             } else if constexpr (std::is_same_v<Q, turboq::SPSCMessageQueue>) {
-                return turbofw::QueueType::SPSC;
+                return turbofw::QueueDefinition::QueueType::SPSC;
             }
         }();
 
