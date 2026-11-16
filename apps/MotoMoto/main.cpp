@@ -26,7 +26,7 @@ int main(int argc, char* argv[]) {
         auto options = cxxopts::Options{"MotoMoto", "The Metadata service"};
         // clang-format off
         options.add_options()
-            ("e,env", "Path to environment config", cxxopts::value<std::filesystem::path>(), "PATH")
+            ("s,system", "Path to system config", cxxopts::value<std::filesystem::path>(), "PATH")
             ("c,config", "Path to service config", cxxopts::value<std::filesystem::path>(), "PATH")
             ("d,dump", "Dump config and exit")
             ("stdout", "Log to stdout")
@@ -53,43 +53,41 @@ int main(int argc, char* argv[]) {
             return EXIT_FAILURE;
         }
 
-        if (!parseResult.count("env")) {
-            throw std::runtime_error{"option '--env' is mandatory"};
+        if (!parseResult.count("system")) {
+            throw std::runtime_error{"option '--system' is mandatory"};
         }
-        auto const sys = turbofw::SystemDefinition::loadFromFile(parseResult["env"].as<std::filesystem::path>());
+        auto const sys = turbofw::SystemDefinition::loadFromFile(parseResult["system"].as<std::filesystem::path>());
         if (!sys) {
             throw std::runtime_error{sys.error()};
         }
 
-        // The environment of this service
-        auto const services = sys->services();
-        if (!services) {
-            throw std::runtime_error{services.error()};
-        }
-        auto const found = std::ranges::find_if(*services, [&](auto const& service) {
-            return service.name == config->service.name;
-        });
-        if (found == services->end()) {
-            throw std::runtime_error{
-                std::format("service \"{}\" is not configured in the environment", config->service.name)};
-        }
-        auto const env = turbofw::Environment::create(std::move(*found));
-        if (!env) {
-            throw std::runtime_error{env.error()};
-        }
+        auto const env = turbofw::SystemDefinition::loadFromFile(parseResult["system"].as<std::filesystem::path>())
+                             .and_then([&](auto const& system) {
+                                 return system.environmentFor(config->service.name);
+                             })
+                             .transform_error([](std::string err) {
+                                 // TODO:
+                                 throw std::runtime_error(std::move(err));
+                                 return err;
+                             })
+                             .value();
+
+        // TODO: env.initLogger(...)
 
         if (parseResult.count("stdout")) {
             initLoggerStdOut();
         } else {
+#if 0
             // the daily log file goes under the working directory (or the current one)
             auto const logPrefix = env->workingDirectory().empty() ? std::filesystem::path{"logs"} / "MotoMoto"
                                                                    : env->workingDirectory() / "logs" / "MotoMoto";
             auto const logLevel = logLevelFromString(config->logger.logLevel).value_or(turbofw::LogLevel::Debug);
             initLoggerDailyFile(logPrefix, logLevel);
+#endif
         }
 
         // Run process loop
-        Process{*env}.run();
+        Process{*config, env}.run();
 
         shutdownLogger();
 

@@ -289,7 +289,9 @@ void validateShape(nlohmann::json const& json) {
 
 } // namespace
 
-// --------------------------------------------------------------------------------------------
+SystemDefinition::SystemDefinition(nlohmann::json json, Vars vars) : json_{std::move(json)}, vars_{std::move(vars)} {
+    validateShape(json_);
+}
 
 auto SystemDefinition::loadFromJson(std::string_view content, Vars vars) noexcept
     -> std::expected<SystemDefinition, std::string> {
@@ -313,10 +315,6 @@ auto SystemDefinition::loadFromFile(std::filesystem::path const& configPath, Var
     } catch (std::exception const& e) {
         return std::unexpected{fmt::format("can't load environment from \"{}\": {}", configPath.string(), e.what())};
     }
-}
-
-SystemDefinition::SystemDefinition(nlohmann::json json, Vars vars) : json_(std::move(json)), vars_(std::move(vars)) {
-    validateShape(json_);
 }
 
 auto SystemDefinition::scope() const -> std::expected<std::string, std::string> {

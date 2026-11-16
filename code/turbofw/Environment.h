@@ -42,6 +42,12 @@ namespace turbofw {
 /// \endcode
 ///
 class Environment {
+private:
+    turbofw::ServiceDefinition definition_;
+
+    /// Takes an already validated definition
+    explicit Environment(turbofw::ServiceDefinition definition) noexcept : definition_{std::move(definition)} {}
+
 public:
     /// Validate the service definition (names, roles, creation options, memory source options)
     /// and construct the environment; a message describes the first invalid entry
@@ -162,9 +168,6 @@ public:
     }
 
 private:
-    /// Takes an already validated definition
-    explicit Environment(turbofw::ServiceDefinition definition) noexcept : definition_{std::move(definition)} {}
-
     /// Open (or open only) the role queue of the given family; the role queue type must match
     template <typename Q>
         requires std::is_same_v<Q, turboq::MulticastMessageQueue> || std::is_same_v<Q, turboq::MPSCMessageQueue> ||
@@ -215,8 +218,6 @@ private:
     /// directories are created first
     [[nodiscard]] auto makeMemorySource(turbofw::QueueDefinition const& definition, bool createDirectories) const
         -> std::expected<turboq::DefaultMemorySource, std::string>;
-
-    turbofw::ServiceDefinition definition_;
 };
 
 } // namespace turbofw

@@ -1,7 +1,7 @@
 # MotoMoto: the Metadata service
 set(TargetName MotoMoto)
 
-file(COPY config.json env.json DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+file(COPY config.json system.json DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 
 add_executable(${TargetName})
 target_link_libraries(${TargetName}

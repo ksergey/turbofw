@@ -19,7 +19,7 @@ using turbofw::installDefaultSignalHandlers;
 using turbofw::processSignal;
 using turbofw::removeDefaultSignalHandlers;
 
-Process::Process(Environment const& env) {
+Process::Process([[maybe_unused]] Config const& config, Environment const& env) {
     auto producer = env.createProducer<Producer>("data", false);
     if (!producer) {
         throw std::runtime_error{producer.error()};

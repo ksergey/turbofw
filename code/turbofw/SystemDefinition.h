@@ -12,6 +12,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include "Environment.h"
 #include "ServiceDefinition.h"
 
 namespace turbofw {
@@ -38,6 +39,14 @@ public:
     /// Extra variables for ${VAR} expansion, applied before the process environment
     using Vars = std::map<std::string, std::string, std::less<>>;
 
+private:
+    nlohmann::json json_;
+    Vars vars_;
+
+    /// Takes the parsed config. Throws std::runtime_error when the shape is invalid
+    SystemDefinition(nlohmann::json json, Vars vars);
+
+public:
     /// Load environment from a json string in memory
     /// \see the class docblock for what is validated
     [[nodiscard]] static auto loadFromJson(std::string_view content, Vars vars = {}) noexcept
@@ -63,12 +72,12 @@ public:
     /// Find a statically configured service by (expanded) name
     [[nodiscard]] auto findService(std::string_view name) const -> std::expected<ServiceDefinition, std::string>;
 
-private:
-    /// Takes the parsed config. Throws std::runtime_error when the shape is invalid
-    SystemDefinition(nlohmann::json json, Vars vars);
-
-    nlohmann::json json_;
-    Vars vars_;
+    /// Create environment for service
+    [[nodiscard]] auto environmentFor(std::string_view name) const -> std::expected<Environment, std::string> {
+        return this->findService(name).and_then([](ServiceDefinition definition) {
+            return Environment::create(std::move(definition));
+        });
+    }
 };
 
 } // namespace turbofw

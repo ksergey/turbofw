@@ -13,6 +13,8 @@
 #include <turbofw/mixin/SBEServiceIdStampMixin.h>
 #include <turbofw/schema/metadata/schema.h>
 
+#include "Config.h"
+
 namespace app {
 
 using turbofw::Environment;
@@ -47,7 +49,7 @@ public:
     Process(Process const&) = delete;
     Process& operator=(Process const&) = delete;
 
-    Process(Environment const& env);
+    Process(Config const& config, Environment const& env);
 
     /// Start process loop
     void run();
