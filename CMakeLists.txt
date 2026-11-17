@@ -25,7 +25,7 @@ if (turbofw_BUILD_BENCHMARKS)
 endif()
 
 # ksergey/* libraries, in dependency order
-CPMAddPackage(NAME turboq SOURCE_DIR /data/data/com.termux/files/home/turboq)
+CPMAddPackage("gh:ksergey/turboq#master")
 CPMAddPackage("gh:ksergey/turboq-reactor#master")
 CPMAddPackage(NAME turboq-logger SOURCE_DIR /data/data/com.termux/files/home/turboq-logger)
 CPMAddPackage("gh:ksergey/sbe-code-gen#master")
