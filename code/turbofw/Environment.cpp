@@ -10,6 +10,9 @@
 
 #include <fmt/format.h>
 
+#include <turboq-logger/DailyFileSink.h>
+#include <turboq-logger/StdOutSink.h>
+
 namespace turbofw {
 
 namespace {
@@ -88,6 +91,12 @@ void validateMemorySourceOptions(turbofw::QueueDefinition const& definition) {
 
 } // namespace
 
+Environment::Environment(turbofw::ServiceDefinition definition) noexcept : definition_{std::move(definition)} {}
+
+Environment::~Environment() noexcept {
+    this->shutdownLogger();
+}
+
 auto Environment::create(turbofw::ServiceDefinition definition) noexcept -> std::expected<Environment, std::string> {
     try {
         if (!isServiceName(definition.name)) {
@@ -127,13 +136,27 @@ auto Environment::create(turbofw::ServiceDefinition definition) noexcept -> std:
     }
 }
 
+void Environment::initLoggerStdOut() {
+    turboq::logger::BackendThread::setSink(std::make_shared<turboq::logger::StdOutSink>());
+}
+
+void Environment::initLoggerDailyFile() {
+    auto const prefix = this->workingDirectory() / "logs" / this->name();
+    turboq::logger::BackendThread::setSink(std::make_shared<turboq::logger::DailyFileSink>(prefix));
+}
+
+void Environment::shutdownLogger() {
+    turboq::logger::BackendThread::flush();
+    turboq::logger::BackendThread::stop();
+}
+
 auto Environment::findRoleQueue(std::string_view role) const noexcept -> turbofw::QueueDefinition const* {
     auto const found = definition_.queues.find(std::string{role});
     return found == definition_.queues.end() ? nullptr : &found->second;
 }
 
-auto Environment::makeMemorySource(turbofw::QueueDefinition const& definition, bool createDirectories) const
-    -> std::expected<turboq::DefaultMemorySource, std::string> {
+auto Environment::makeMemorySource(turbofw::QueueDefinition const& definition,
+    bool createDirectories) const -> std::expected<turboq::DefaultMemorySource, std::string> {
     try {
         if (createDirectories) {
             // the queue name may contain '/' ("<scope>/<service>@<role>"): create its parent

@@ -16,6 +16,7 @@
 #include <turboq/Platform.h>
 #include <turboq/SPSCMessageQueue.h>
 
+#include "Logging.h"
 #include "ServiceDefinition.h"
 
 namespace turbofw {
@@ -46,13 +47,15 @@ private:
     turbofw::ServiceDefinition definition_;
 
     /// Takes an already validated definition
-    explicit Environment(turbofw::ServiceDefinition definition) noexcept : definition_{std::move(definition)} {}
+    explicit Environment(turbofw::ServiceDefinition definition) noexcept;
 
 public:
+    ~Environment() noexcept;
+
     /// Validate the service definition (names, roles, creation options, memory source options)
     /// and construct the environment; a message describes the first invalid entry
-    [[nodiscard]] static auto create(turbofw::ServiceDefinition definition) noexcept
-        -> std::expected<Environment, std::string>;
+    [[nodiscard]] static auto create(
+        turbofw::ServiceDefinition definition) noexcept -> std::expected<Environment, std::string>;
 
     [[nodiscard]] auto name() const noexcept -> std::string const& {
         return definition_.name;
@@ -84,8 +87,8 @@ public:
     ///                 is what makes the single-producer guarantee hold; the environment must outlive the producer
     template <typename Producer>
         requires std::is_base_of_v<turboq::MulticastMessageQueue::Producer, Producer>
-    [[nodiscard]] TURBOQ_FORCE_INLINE auto createProducer(std::string_view role, bool openOnly = true) const noexcept
-        -> std::expected<Producer, std::string> {
+    [[nodiscard]] TURBOQ_FORCE_INLINE auto createProducer(
+        std::string_view role, bool openOnly = true) const noexcept -> std::expected<Producer, std::string> {
         try {
             return getQueue<turboq::MulticastMessageQueue>(role, openOnly)
                 .transform([](turboq::MulticastMessageQueue queue) {
@@ -99,8 +102,8 @@ public:
     /// Create a multicast consumer, see createProducer() for template/param docs
     template <typename Consumer>
         requires std::is_base_of_v<turboq::MulticastMessageQueue::Consumer, Consumer>
-    [[nodiscard]] TURBOQ_FORCE_INLINE auto createConsumer(std::string_view role, bool openOnly = true) const noexcept
-        -> std::expected<Consumer, std::string> {
+    [[nodiscard]] TURBOQ_FORCE_INLINE auto createConsumer(
+        std::string_view role, bool openOnly = true) const noexcept -> std::expected<Consumer, std::string> {
         try {
             return getQueue<turboq::MulticastMessageQueue>(role, openOnly)
                 .transform([](turboq::MulticastMessageQueue queue) {
@@ -114,8 +117,8 @@ public:
     /// Create an mpsc producer, see createProducer() for template/param docs
     template <typename Producer>
         requires std::is_base_of_v<turboq::MPSCMessageQueue::Producer, Producer>
-    [[nodiscard]] TURBOQ_FORCE_INLINE auto createProducer(std::string_view role, bool openOnly = true) const noexcept
-        -> std::expected<Producer, std::string> {
+    [[nodiscard]] TURBOQ_FORCE_INLINE auto createProducer(
+        std::string_view role, bool openOnly = true) const noexcept -> std::expected<Producer, std::string> {
         try {
             return getQueue<turboq::MPSCMessageQueue>(role, openOnly).transform([](turboq::MPSCMessageQueue queue) {
                 return Producer{queue.createProducer()};
@@ -128,8 +131,8 @@ public:
     /// Create the (single) mpsc consumer, see createProducer() for template/param docs
     template <typename Consumer>
         requires std::is_base_of_v<turboq::MPSCMessageQueue::Consumer, Consumer>
-    [[nodiscard]] TURBOQ_FORCE_INLINE auto createConsumer(std::string_view role, bool openOnly = true) const noexcept
-        -> std::expected<Consumer, std::string> {
+    [[nodiscard]] TURBOQ_FORCE_INLINE auto createConsumer(
+        std::string_view role, bool openOnly = true) const noexcept -> std::expected<Consumer, std::string> {
         try {
             return getQueue<turboq::MPSCMessageQueue>(role, openOnly).transform([](turboq::MPSCMessageQueue queue) {
                 return Consumer{queue.createConsumer()};
@@ -142,8 +145,8 @@ public:
     /// Create an spsc producer, see createProducer() for template/param docs
     template <typename Producer>
         requires std::is_base_of_v<turboq::SPSCMessageQueue::Producer, Producer>
-    [[nodiscard]] TURBOQ_FORCE_INLINE auto createProducer(std::string_view role, bool openOnly = true) const noexcept
-        -> std::expected<Producer, std::string> {
+    [[nodiscard]] TURBOQ_FORCE_INLINE auto createProducer(
+        std::string_view role, bool openOnly = true) const noexcept -> std::expected<Producer, std::string> {
         try {
             return getQueue<turboq::SPSCMessageQueue>(role, openOnly).transform([](turboq::SPSCMessageQueue queue) {
                 return Producer{queue.createProducer()};
@@ -156,8 +159,8 @@ public:
     /// Create the (single) spsc consumer, see createProducer() for template/param docs
     template <typename Consumer>
         requires std::is_base_of_v<turboq::SPSCMessageQueue::Consumer, Consumer>
-    [[nodiscard]] TURBOQ_FORCE_INLINE auto createConsumer(std::string_view role, bool openOnly = true) const noexcept
-        -> std::expected<Consumer, std::string> {
+    [[nodiscard]] TURBOQ_FORCE_INLINE auto createConsumer(
+        std::string_view role, bool openOnly = true) const noexcept -> std::expected<Consumer, std::string> {
         try {
             return getQueue<turboq::SPSCMessageQueue>(role, openOnly).transform([](turboq::SPSCMessageQueue queue) {
                 return Consumer{queue.createConsumer()};
@@ -167,11 +170,20 @@ public:
         }
     }
 
+    /// Init logger with logging to stdout
+    void initLoggerStdOut();
+
+    /// Init logger with logging to daily file
+    void initLoggerDailyFile();
+
+    /// Stop logger backend thread and sync sink
+    void shutdownLogger();
+
 private:
     /// Open (or open only) the role queue of the given family; the role queue type must match
     template <typename Q>
         requires std::is_same_v<Q, turboq::MulticastMessageQueue> || std::is_same_v<Q, turboq::MPSCMessageQueue> ||
-                 std::is_same_v<Q, turboq::SPSCMessageQueue>
+                     std::is_same_v<Q, turboq::SPSCMessageQueue>
     [[nodiscard]] auto getQueue(std::string_view role, bool openOnly) const noexcept -> std::expected<Q, std::string> {
         constexpr auto queueType = [] {
             if constexpr (std::is_same_v<Q, turboq::MulticastMessageQueue>) {
@@ -216,8 +228,8 @@ private:
 
     /// Build the memory source of a queue definition; when @c createDirectories, missing source
     /// directories are created first
-    [[nodiscard]] auto makeMemorySource(turbofw::QueueDefinition const& definition, bool createDirectories) const
-        -> std::expected<turboq::DefaultMemorySource, std::string>;
+    [[nodiscard]] auto makeMemorySource(turbofw::QueueDefinition const& definition,
+        bool createDirectories) const -> std::expected<turboq::DefaultMemorySource, std::string>;
 };
 
 } // namespace turbofw

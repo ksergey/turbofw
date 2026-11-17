@@ -17,11 +17,6 @@
 int main(int argc, char* argv[]) {
     using namespace app;
 
-    using turbofw::initLoggerDailyFile;
-    using turbofw::initLoggerStdOut;
-    using turbofw::logLevelFromString;
-    using turbofw::shutdownLogger;
-
     try {
         auto options = cxxopts::Options{"MotoMoto", "The Metadata service"};
         // clang-format off
@@ -56,28 +51,25 @@ int main(int argc, char* argv[]) {
         if (!parseResult.count("system")) {
             throw std::runtime_error{"option '--system' is mandatory"};
         }
-        auto const sys = turbofw::SystemDefinition::loadFromFile(parseResult["system"].as<std::filesystem::path>());
 
-        auto const env = sys.environmentFor(config->service.name);
-
-        // TODO: env.initLogger(...)
-
-        if (parseResult.count("stdout")) {
-            initLoggerStdOut();
-        } else {
-#if 0
-            // the daily log file goes under the working directory (or the current one)
-            auto const logPrefix = env.workingDirectory().empty() ? std::filesystem::path{"logs"} / "MotoMoto"
-                                                                   : env.workingDirectory() / "logs" / "MotoMoto";
-            auto const logLevel = logLevelFromString(config->logger.logLevel).value_or(turbofw::LogLevel::Debug);
-            initLoggerDailyFile(logPrefix, logLevel);
-#endif
+        auto env = turbofw::SystemDefinition::loadFromFile(parseResult["system"].as<std::filesystem::path>())
+                       .and_then([&](auto const& sys) {
+                           return sys.environmentFor(config->service.name);
+                       });
+        if (!env) {
+            throw std::runtime_error{env.error()};
         }
 
-        // Run process loop
-        Process{*config, env}.run();
+        if (parseResult.count("stdout")) {
+            env->initLoggerStdOut();
+        } else {
+            env->initLoggerDailyFile();
+        }
 
-        shutdownLogger();
+        turbofw::setLogLevel(*turbofw::logLevelFromString(config->logger.logLevel));
+
+        // Run process loop
+        Process{*config, *env}.run();
 
     } catch (std::exception const& e) {
         std::println(stderr, "ERROR: {}", e.what());

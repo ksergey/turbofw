@@ -47,7 +47,7 @@ int main(int argc, char* argv[]) {
             throw std::runtime_error{"option '-env' is mandatory"};
         }
 
-        auto const sys = turbofw::SystemDefinition::tryLoadFromFile(parseResult["env"].as<std::filesystem::path>());
+        auto const sys = turbofw::SystemDefinition::loadFromFile(parseResult["env"].as<std::filesystem::path>());
         if (!sys) {
             throw std::runtime_error{sys.error()};
         }

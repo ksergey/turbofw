@@ -120,8 +120,8 @@ namespace {
 }
 
 // Parse a size literal ("64MiB", bare number of bytes); returns bytes. Throws std::runtime_error
-[[nodiscard]] auto parseByteSize(nlohmann::json const& value, std::string_view queueName, std::string_view key)
-    -> std::size_t {
+[[nodiscard]] auto parseByteSize(
+    nlohmann::json const& value, std::string_view queueName, std::string_view key) -> std::size_t {
     if (!value.is_string()) {
         throw std::runtime_error{
             fmt::format("queue \"{}\": \"{}\" must be a size literal like \"64MiB\"", queueName, key)};
@@ -293,8 +293,8 @@ SystemDefinition::SystemDefinition(nlohmann::json json, Vars vars) : json_(std::
     validateShape(json_);
 }
 
-auto SystemDefinition::tryLoadFromJson(std::string_view content, Vars vars) noexcept
-    -> std::expected<SystemDefinition, std::string> {
+auto SystemDefinition::loadFromJson(
+    std::string_view content, Vars vars) noexcept -> std::expected<SystemDefinition, std::string> {
     try {
         // ignore_comments: allow "//" comments in config files
         return SystemDefinition{nlohmann::json::parse(content, nullptr, true, true), std::move(vars)};
@@ -303,16 +303,8 @@ auto SystemDefinition::tryLoadFromJson(std::string_view content, Vars vars) noex
     }
 }
 
-auto SystemDefinition::loadFromJson(std::string_view content, Vars vars) -> SystemDefinition {
-    auto result = tryLoadFromJson(content, std::move(vars));
-    if (!result) {
-        throw std::runtime_error{result.error()};
-    }
-    return std::move(*result);
-}
-
-auto SystemDefinition::tryLoadFromFile(std::filesystem::path const& configPath, Vars vars) noexcept
-    -> std::expected<SystemDefinition, std::string> {
+auto SystemDefinition::loadFromFile(
+    std::filesystem::path const& configPath, Vars vars) noexcept -> std::expected<SystemDefinition, std::string> {
     try {
         auto stream = std::ifstream{configPath};
         if (!stream) {
@@ -323,14 +315,6 @@ auto SystemDefinition::tryLoadFromFile(std::filesystem::path const& configPath, 
     } catch (std::exception const& e) {
         return std::unexpected{fmt::format("can't load environment from \"{}\": {}", configPath.string(), e.what())};
     }
-}
-
-auto SystemDefinition::loadFromFile(std::filesystem::path const& configPath, Vars vars) -> SystemDefinition {
-    auto result = tryLoadFromFile(configPath, std::move(vars));
-    if (!result) {
-        throw std::runtime_error{result.error()};
-    }
-    return std::move(*result);
 }
 
 auto SystemDefinition::scope() const -> std::expected<std::string, std::string> {
@@ -350,8 +334,8 @@ auto SystemDefinition::scope() const -> std::expected<std::string, std::string> 
 namespace {
 
 // The "queues" section reader; shared by queues() and services() (role queues resolve here)
-[[nodiscard]] auto parseQueues(nlohmann::json const& json, SystemDefinition::Vars const& vars)
-    -> std::vector<QueueDefinition> {
+[[nodiscard]] auto parseQueues(
+    nlohmann::json const& json, SystemDefinition::Vars const& vars) -> std::vector<QueueDefinition> {
     static auto const emptyArray = nlohmann::json::array();
     auto const& entries = json.contains("queues") ? json.at("queues") : emptyArray;
 
