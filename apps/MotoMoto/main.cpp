@@ -57,20 +57,8 @@ int main(int argc, char* argv[]) {
             throw std::runtime_error{"option '--system' is mandatory"};
         }
         auto const sys = turbofw::SystemDefinition::loadFromFile(parseResult["system"].as<std::filesystem::path>());
-        if (!sys) {
-            throw std::runtime_error{sys.error()};
-        }
 
-        auto const env = turbofw::SystemDefinition::loadFromFile(parseResult["system"].as<std::filesystem::path>())
-                             .and_then([&](auto const& system) {
-                                 return system.environmentFor(config->service.name);
-                             })
-                             .transform_error([](std::string err) {
-                                 // TODO:
-                                 throw std::runtime_error(std::move(err));
-                                 return err;
-                             })
-                             .value();
+        auto const env = sys.environmentFor(config->service.name);
 
         // TODO: env.initLogger(...)
 
@@ -79,8 +67,8 @@ int main(int argc, char* argv[]) {
         } else {
 #if 0
             // the daily log file goes under the working directory (or the current one)
-            auto const logPrefix = env->workingDirectory().empty() ? std::filesystem::path{"logs"} / "MotoMoto"
-                                                                   : env->workingDirectory() / "logs" / "MotoMoto";
+            auto const logPrefix = env.workingDirectory().empty() ? std::filesystem::path{"logs"} / "MotoMoto"
+                                                                   : env.workingDirectory() / "logs" / "MotoMoto";
             auto const logLevel = logLevelFromString(config->logger.logLevel).value_or(turbofw::LogLevel::Debug);
             initLoggerDailyFile(logPrefix, logLevel);
 #endif

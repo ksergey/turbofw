@@ -48,14 +48,26 @@ private:
 
 public:
     /// Load environment from a json string in memory
+    /// \returns std::unexpected with a message on any error
     /// \see the class docblock for what is validated
-    [[nodiscard]] static auto loadFromJson(std::string_view content, Vars vars = {}) noexcept
+    [[nodiscard]] static auto tryLoadFromJson(std::string_view content, Vars vars = {}) noexcept
+        -> std::expected<SystemDefinition, std::string>;
+
+    /// Load environment from a json string in memory
+    /// \throws std::runtime_error on any error
+    /// \see the class docblock for what is validated
+    [[nodiscard]] static auto loadFromJson(std::string_view content, Vars vars = {}) -> SystemDefinition;
+
+    /// Load environment from a json config file
+    /// \returns std::unexpected with a message on any error
+    /// \see the class docblock for what is validated
+    [[nodiscard]] static auto tryLoadFromFile(std::filesystem::path const& configPath, Vars vars = {}) noexcept
         -> std::expected<SystemDefinition, std::string>;
 
     /// Load environment from a json config file
+    /// \throws std::runtime_error on any error
     /// \see the class docblock for what is validated
-    [[nodiscard]] static auto loadFromFile(std::filesystem::path const& configPath, Vars vars = {}) noexcept
-        -> std::expected<SystemDefinition, std::string>;
+    [[nodiscard]] static auto loadFromFile(std::filesystem::path const& configPath, Vars vars = {}) -> SystemDefinition;
 
     /// Config scope: the name of the system/deployment all services of one system belong to;
     /// expanded (and charset-validated) on every call
@@ -73,10 +85,21 @@ public:
     [[nodiscard]] auto findService(std::string_view name) const -> std::expected<ServiceDefinition, std::string>;
 
     /// Create environment for service
-    [[nodiscard]] auto environmentFor(std::string_view name) const -> std::expected<Environment, std::string> {
+    /// \returns std::unexpected with a message on any error
+    [[nodiscard]] auto tryEnvironmentFor(std::string_view name) const -> std::expected<Environment, std::string> {
         return this->findService(name).and_then([](ServiceDefinition definition) {
             return Environment::create(std::move(definition));
         });
+    }
+
+    /// Create environment for service
+    /// \throws std::runtime_error on any error
+    [[nodiscard]] auto environmentFor(std::string_view name) const -> Environment {
+        auto result = this->tryEnvironmentFor(name);
+        if (!result) {
+            throw std::runtime_error{result.error()};
+        }
+        return std::move(*result);
     }
 };
 

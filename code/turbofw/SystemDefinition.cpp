@@ -289,11 +289,11 @@ void validateShape(nlohmann::json const& json) {
 
 } // namespace
 
-SystemDefinition::SystemDefinition(nlohmann::json json, Vars vars) : json_{std::move(json)}, vars_{std::move(vars)} {
+SystemDefinition::SystemDefinition(nlohmann::json json, Vars vars) : json_(std::move(json)), vars_(std::move(vars)) {
     validateShape(json_);
 }
 
-auto SystemDefinition::loadFromJson(std::string_view content, Vars vars) noexcept
+auto SystemDefinition::tryLoadFromJson(std::string_view content, Vars vars) noexcept
     -> std::expected<SystemDefinition, std::string> {
     try {
         // ignore_comments: allow "//" comments in config files
@@ -303,7 +303,15 @@ auto SystemDefinition::loadFromJson(std::string_view content, Vars vars) noexcep
     }
 }
 
-auto SystemDefinition::loadFromFile(std::filesystem::path const& configPath, Vars vars) noexcept
+auto SystemDefinition::loadFromJson(std::string_view content, Vars vars) -> SystemDefinition {
+    auto result = tryLoadFromJson(content, std::move(vars));
+    if (!result) {
+        throw std::runtime_error{result.error()};
+    }
+    return std::move(*result);
+}
+
+auto SystemDefinition::tryLoadFromFile(std::filesystem::path const& configPath, Vars vars) noexcept
     -> std::expected<SystemDefinition, std::string> {
     try {
         auto stream = std::ifstream{configPath};
@@ -315,6 +323,14 @@ auto SystemDefinition::loadFromFile(std::filesystem::path const& configPath, Var
     } catch (std::exception const& e) {
         return std::unexpected{fmt::format("can't load environment from \"{}\": {}", configPath.string(), e.what())};
     }
+}
+
+auto SystemDefinition::loadFromFile(std::filesystem::path const& configPath, Vars vars) -> SystemDefinition {
+    auto result = tryLoadFromFile(configPath, std::move(vars));
+    if (!result) {
+        throw std::runtime_error{result.error()};
+    }
+    return std::move(*result);
 }
 
 auto SystemDefinition::scope() const -> std::expected<std::string, std::string> {
