@@ -10,6 +10,11 @@
 #include <type_traits>
 #include <utility>
 
+#include <cmath>
+#include <concepts>
+#include <format>
+#include <string>
+
 #include "CtString.h"
 #include "mp/Algorithm.h"
 #include "mp/List.h"
@@ -158,6 +163,263 @@ constexpr auto tryDecodeSBE(std::span<std::byte const> buffer, Fn&& fn) -> bool 
     auto const bufferMutable = std::span{const_cast<std::byte*>(buffer.data()), buffer.size()};
     auto const header = Header{bufferMutable.data()};
     return tryDecodeSBE<L, Fn>(buffer, header, std::forward<Fn>(fn));
+}
+
+namespace detail {
+
+// ---- generic JSON serialization of decoded SBE messages (debug/logging path: allocates) ----
+
+/// Detects the generated TypeList element count
+template <typename L>
+consteval auto sbeTypeListCount() -> std::size_t {
+    return []<template <typename...> typename List, typename... Ts>(List<Ts...>*) {
+        return sizeof...(Ts);
+    }(static_cast<L*>(nullptr));
+}
+
+/// TypeList element at index I
+template <std::size_t I, typename L>
+struct SBETypeListAt;
+template <template <typename...> typename List, typename T, typename... Ts>
+struct SBETypeListAt<0, List<T, Ts...>> {
+    using type = T;
+};
+template <std::size_t I, template <typename...> typename List, typename T, typename... Ts>
+struct SBETypeListAt<I, List<T, Ts...>> : SBETypeListAt<I - 1, List<Ts...>> {};
+
+/// Field ref kinds of the generated codecs, by introspection
+template <typename R>
+concept SBEFieldWithValueType = requires { typename R::ValueType; };
+
+template <typename R>
+concept SBEFieldIsGroup = !SBEFieldWithValueType<R> && requires(R r) {
+    typename R::Fields;
+    { r.count() } -> std::convertible_to<std::uint16_t>;
+    { r.hasNext() } -> std::convertible_to<bool>;
+    r.next();
+};
+
+template <typename R>
+concept SBEFieldIsData = !SBEFieldWithValueType<R> && requires(R r) {
+    { r.value() } -> std::convertible_to<std::string_view>;
+};
+
+template <typename R>
+concept SBEFieldIsComposite = SBEFieldWithValueType<R> && requires { typename R::Fields; };
+
+template <typename V>
+concept SBEHasBitNames = requires { V::sbeBitNames; };
+
+/// A decimal-like composite: exactly two fields, named "mantissa" and "exponent" (SBE decimal convention,
+/// e.g. Price9/Price9NULL). The double value is mantissa * 10^exponent.
+template <typename R>
+consteval auto sbeFieldIsDecimal() -> bool {
+    if constexpr (!SBEFieldIsComposite<R>) {
+        return false;
+    } else if constexpr (sbeTypeListCount<typename R::Fields>() != 2) {
+        return false;
+    } else {
+        using MantissaRef = typename SBETypeListAt<0, typename R::Fields>::type;
+        using ExponentRef = typename SBETypeListAt<1, typename R::Fields>::type;
+        return std::string_view{MantissaRef::sbeRefName()} == "mantissa" &&
+               std::string_view{ExponentRef::sbeRefName()} == "exponent";
+    }
+}
+
+/// JSON output state: the output string, serialization options and the "no comma yet" flag of the current object
+struct SBEJsonWriter {
+    std::string& out;
+    bool decimalsAsDouble;
+    bool first{true};
+
+    void key(std::string_view name) {
+        if (!first) {
+            out.push_back(',');
+        }
+        first = false;
+        out.push_back('"');
+        out.append(name);
+        out.append("\":");
+    }
+
+    void string(std::string_view value) {
+        out.push_back('"');
+        for (char const c : value) {
+            switch (c) {
+            case '"': out.append("\\\""); break;
+            case '\\': out.append("\\\\"); break;
+            case '\n': out.append("\\n"); break;
+            case '\r': out.append("\\r"); break;
+            case '\t': out.append("\\t"); break;
+            default:
+                if (static_cast<unsigned char>(c) < 0x20u) {
+                    static constexpr char kHex[] = "0123456789abcdef";
+                    unsigned char const uc = static_cast<unsigned char>(c);
+                    out.append("\\u00");
+                    out.push_back(kHex[(uc >> 4) & 0xFu]);
+                    out.push_back(kHex[uc & 0xFu]);
+                } else {
+                    out.push_back(c);
+                }
+            }
+        }
+        out.push_back('"');
+    }
+
+    void null() {
+        out.append("null");
+    }
+
+    template <typename V>
+        requires std::is_integral_v<V> || std::is_floating_point_v<V>
+    void number(V value) {
+        if constexpr (std::is_floating_point_v<V>) {
+            out += std::format("{}", value);
+        } else if constexpr (std::is_signed_v<V>) {
+            out += std::format("{}", static_cast<std::int64_t>(value));
+        } else {
+            out += std::format("{}", static_cast<std::uint64_t>(value));
+        }
+    }
+};
+
+/// Writes one "name": value pair
+template <typename R>
+void serializeSBEField(SBEJsonWriter& writer, R r);
+
+/// Writes the fields of obj (a message, a group entry or a composite ref) as a JSON object body
+template <typename O>
+    requires requires { typename O::Fields; }
+void serializeSBEFields(SBEJsonWriter& writer, O& obj) {
+    bool const outerFirst = writer.first;
+    writer.first = true;
+    [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+        (serializeSBEField(writer, obj.template get<Is>()), ...);
+    }(std::make_index_sequence<sbeTypeListCount<typename O::Fields>()>{});
+    writer.out.push_back('}');
+    writer.first = outerFirst;
+}
+
+/// Writes the value of one field ref (key is written by the caller via SBEJsonWriter::key)
+template <typename R>
+void serializeSBEFieldValue(SBEJsonWriter& writer, R r) {
+    // value-carrying refs always carry present(); group and data refs do not
+    if constexpr (requires { r.present(); }) {
+        if (!r.present()) {
+            writer.null();
+            return;
+        }
+    }
+    if constexpr (SBEFieldIsGroup<R>) {
+        writer.out.push_back('[');
+        bool entryFirst = true;
+        while (r.hasNext()) {
+            r.next();
+            if (!entryFirst) {
+                writer.out.push_back(',');
+            }
+            entryFirst = false;
+            writer.out.push_back('{');
+            serializeSBEFields(writer, r);
+        }
+        writer.out.push_back(']');
+    } else if constexpr (SBEFieldIsData<R>) {
+        writer.string(r.value());
+    } else if constexpr (sbeFieldIsDecimal<R>()) {
+        auto const mantissa = r.template get<0>();
+        auto const exponent = r.template get<1>();
+        static_assert(std::string_view{decltype(mantissa)::sbeRefName()} == "mantissa" &&
+                          std::string_view{decltype(exponent)::sbeRefName()} == "exponent",
+            "unexpected decimal-like composite shape");
+        if (!mantissa.present() || !exponent.present()) {
+            writer.null();
+            return;
+        }
+        if (writer.decimalsAsDouble) {
+            // mantissa * 10^exponent; for the common negative exponents the division by an exact integer
+            // power of ten is correctly rounded, so e.g. 101250000000 / 1e9 is exactly 101.25 (a
+            // multiplication by the double approximation of 1e-9 would not be)
+            double const exponentValue = static_cast<double>(exponent.value());
+            writer.number(exponentValue <= 0.0 ? static_cast<double>(mantissa.value()) / std::pow(10.0, -exponentValue)
+                                               : static_cast<double>(mantissa.value()) * std::pow(10.0, exponentValue));
+            return;
+        }
+        writer.out.push_back('{');
+        serializeSBEFields(writer, r);
+    } else if constexpr (SBEFieldWithValueType<R> && SBEHasBitNames<typename R::ValueType>) {
+        using ValueType = typename R::ValueType;
+        auto const bits = static_cast<std::uint64_t>(r.value());
+        writer.out.push_back('[');
+        bool entryFirst = true;
+        for (auto const& [mask, name] : ValueType::sbeBitNames) {
+            if ((mask & bits) == mask) {
+                if (!entryFirst) {
+                    writer.out.push_back(',');
+                }
+                entryFirst = false;
+                writer.string(name);
+            }
+        }
+        writer.out.push_back(']');
+    } else if constexpr (SBEFieldIsComposite<R>) {
+        writer.out.push_back('{');
+        serializeSBEFields(writer, r);
+    } else if constexpr (SBEFieldWithValueType<R> && std::is_enum_v<typename R::ValueType>) {
+        using ValueType = typename R::ValueType;
+        auto const value = r.value();
+        if constexpr (requires { sbeEnumNames(value); }) {
+            for (auto const& [enumValue, name] : sbeEnumNames(value)) {
+                if (enumValue == value) {
+                    writer.string(name);
+                    return;
+                }
+            }
+        }
+        writer.number(static_cast<std::underlying_type_t<ValueType>>(value));
+    } else if constexpr (SBEFieldWithValueType<R>) {
+        static_assert(std::is_arithmetic_v<typename R::ValueType>, "unsupported SBE field value type");
+        writer.number(r.value());
+    } else {
+        static_assert(sizeof(R) == 0, "unsupported SBE field ref kind");
+    }
+}
+
+/// Writes one "name": value pair
+template <typename R>
+void serializeSBEField(SBEJsonWriter& writer, R r) {
+    writer.key(R::sbeRefName());
+    serializeSBEFieldValue(writer, r);
+}
+
+} // namespace detail
+
+/// Options of sbeToJson
+struct SbeJsonOptions {
+    /// Serialize decimal-like composites (mantissa + exponent, e.g. Price9) as a double number instead of a
+    /// nested object {"mantissa": ..., "exponent": ...}
+    bool decimalsAsDouble = true;
+};
+
+/// Serializes a decoded SBE message to a JSON object string: {"message":"Name", ...fields in schema order...}.
+/// Works generically over the generated codec introspection (Fields, get<I>, sbeRefName, present, value): plain
+/// and optional (absent -> null) scalars become numbers, enums become their value names (unknown values fall
+/// back to the underlying number), sets become arrays of the set bit names, var-length data fields become
+/// strings, composites become nested objects and repeating groups become arrays of entry objects.
+/// Decimal-like composites (mantissa + exponent) are emitted as doubles per SbeJsonOptions::decimalsAsDouble.
+/// A debug/logging convenience: it allocates; keep it off hot paths.
+template <SBEMessage M>
+[[nodiscard]] auto sbeToJson(M msg, SbeJsonOptions options = {}) -> std::string {
+    std::string out;
+    out.reserve(256);
+    out.push_back('{');
+    auto writer = detail::SBEJsonWriter{out, options.decimalsAsDouble, true};
+    writer.key("message");
+    writer.string(M::sbeMessageName());
+    [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+        (detail::serializeSBEField(writer, msg.template get<Is>()), ...);
+    }(std::make_index_sequence<detail::sbeTypeListCount<typename M::Fields>()>{});
+    out.push_back('}');
+    return out;
 }
 
 } // namespace turbofw
