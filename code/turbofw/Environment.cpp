@@ -91,12 +91,6 @@ void validateMemorySourceOptions(turbofw::QueueDefinition const& definition) {
 
 } // namespace
 
-Environment::Environment(turbofw::ServiceDefinition definition) noexcept : definition_{std::move(definition)} {}
-
-Environment::~Environment() noexcept {
-    this->shutdownLogger();
-}
-
 auto Environment::create(turbofw::ServiceDefinition definition) noexcept -> std::expected<Environment, std::string> {
     try {
         if (!isServiceName(definition.name)) {

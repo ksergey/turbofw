@@ -47,11 +47,9 @@ private:
     turbofw::ServiceDefinition definition_;
 
     /// Takes an already validated definition
-    explicit Environment(turbofw::ServiceDefinition definition) noexcept;
+    explicit Environment(turbofw::ServiceDefinition definition) noexcept : definition_{std::move(definition)} {}
 
 public:
-    ~Environment() noexcept;
-
     /// Validate the service definition (names, roles, creation options, memory source options)
     /// and construct the environment; a message describes the first invalid entry
     [[nodiscard]] static auto create(
@@ -171,13 +169,13 @@ public:
     }
 
     /// Init logger with logging to stdout
-    void initLoggerStdOut();
+    static void initLoggerStdOut();
 
     /// Init logger with logging to daily file
     void initLoggerDailyFile();
 
     /// Stop logger backend thread and sync sink
-    void shutdownLogger();
+    static void shutdownLogger();
 
 private:
     /// Open (or open only) the role queue of the given family; the role queue type must match

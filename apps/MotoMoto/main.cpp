@@ -15,7 +15,7 @@
 #include "Process.h"
 
 int main(int argc, char* argv[]) {
-    using namespace app;
+    int rc = EXIT_SUCCESS;
 
     try {
         auto options = cxxopts::Options{"MotoMoto", "The Metadata service"};
@@ -38,7 +38,7 @@ int main(int argc, char* argv[]) {
         if (!parseResult.count("config")) {
             throw std::runtime_error{"option '--config' is mandatory"};
         }
-        auto const config = Config::loadFromFile(parseResult["config"].as<std::filesystem::path>());
+        auto const config = app::Config::loadFromFile(parseResult["config"].as<std::filesystem::path>());
         if (!config) {
             throw std::runtime_error{config.error()};
         }
@@ -60,20 +60,29 @@ int main(int argc, char* argv[]) {
             throw std::runtime_error{env.error()};
         }
 
+        // Set logger max verbosity level
+        turbofw::setLogLevel(*turbofw::logLevelFromString(config->logger.logLevel));
+
+        // Init logger sink
         if (parseResult.count("stdout")) {
             env->initLoggerStdOut();
         } else {
             env->initLoggerDailyFile();
         }
 
-        turbofw::setLogLevel(*turbofw::logLevelFromString(config->logger.logLevel));
-
         // Run process loop
-        Process{*config, *env}.run();
+        app::Process{*config, *env}.run();
 
     } catch (std::exception const& e) {
         std::println(stderr, "ERROR: {}", e.what());
-        return EXIT_FAILURE;
+        if (turbofw::isLoggerBackendRunning()) {
+            tq_error("ERROR: {}", e.what());
+        }
+        rc = EXIT_FAILURE;
     }
-    return EXIT_SUCCESS;
+
+    // Shutdown logger
+    turbofw::Environment::shutdownLogger();
+
+    return rc;
 }
