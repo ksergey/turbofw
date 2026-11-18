@@ -23,7 +23,7 @@ struct ReceiveCounters {
 };
 
 /// Adds a SBE-aware `receive` operation to a consumer that provides `fetch()` and `consume()`: drains the queue,
-/// fetching buffers and dispatching them via `tryDecodeSBE<L>()` until the queue is empty. `L` is the list of
+/// fetching buffers and dispatching them via `decodeSBE<L>()` until the queue is empty. `L` is the list of
 /// expected message types; they must share one generated MessageHeader (`SBEMessageHeader<L>` checks it).
 ///
 /// Returns a \ref ReceiveCounters: `received` -- every fetched buffer; `handled` -- buffers decoded into a
@@ -33,7 +33,7 @@ struct ReceiveCounters {
 ///
 /// Mixin hook `processMessage(header, buffer)`: invoked before dispatch for every mixin of `Self::Mixins` that
 /// declares it (in list order). The hook runs for every buffer with a readable MessageHeader, including the ones
-/// `tryDecodeSBE` will not handle -- hooks demultiplex by the acting `(schemaId, templateId)` themselves; a hook
+/// `decodeSBE` will not handle -- hooks demultiplex by the acting `(schemaId, templateId)` themselves; a hook
 /// that needs fields decodes its own message type from the buffer. The callback no-throw rule applies to hooks.
 struct SBEReceiveMixin {
     template <typename L, typename Self, typename Fn>
@@ -67,7 +67,7 @@ struct SBEReceiveMixin {
                 });
 
                 // TODO: need an mixin which drop processing on not match field value
-                counters.handled += tryDecodeSBE<L, Fn>(buffer, header, std::forward<Fn>(fn)) ? 1u : 0u;
+                counters.handled += decodeSBE<L, Fn>(buffer, header, std::forward<Fn>(fn)) ? 1u : 0u;
             }();
 
             self.consume();

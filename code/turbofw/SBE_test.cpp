@@ -116,9 +116,9 @@ TEST_SUITE("SBE") {
         using Messages = mp::List<turbofw::schema::market_data::Snapshot, turbofw::schema::trading::CreateContext,
             turbofw::schema::service::Heartbeat>;
 
-        CHECK(turbofw::tryDecodeSBE<Messages>(snapshotBuffer, fn));
-        CHECK(turbofw::tryDecodeSBE<Messages>(ctxBuffer, fn));
-        CHECK(turbofw::tryDecodeSBE<Messages>(hbBuffer, fn));
+        CHECK(turbofw::decodeSBE<Messages>(snapshotBuffer, fn));
+        CHECK(turbofw::decodeSBE<Messages>(ctxBuffer, fn));
+        CHECK(turbofw::decodeSBE<Messages>(hbBuffer, fn));
         CHECK_EQ(snapshotCalls, 1);
         CHECK_EQ(contextCalls, 1);
         CHECK_EQ(heartbeatCalls, 1);
@@ -129,7 +129,7 @@ TEST_SUITE("SBE") {
         encodeSnapshot(buffer);
 
         auto calls = 0;
-        auto const result = turbofw::tryDecodeSBE<
+        auto const result = turbofw::decodeSBE<
             mp::List<turbofw::schema::market_data::Snapshot, turbofw::schema::trading::CreateContext>>(
             buffer, [&](auto msg) {
                 // `if constexpr` instead of a static_assert: the invocable check instantiates both branches,
@@ -154,8 +154,9 @@ TEST_SUITE("SBE") {
         auto const callback = [&calls](auto&&...) {
             ++calls;
         };
-        auto const result = turbofw::tryDecodeSBE<
-            mp::List<turbofw::schema::service::Heartbeat, turbofw::schema::market_data::Snapshot>>(buffer, callback);
+        auto const result =
+            turbofw::decodeSBE<mp::List<turbofw::schema::service::Heartbeat, turbofw::schema::market_data::Snapshot>>(
+                buffer, callback);
         REQUIRE_FALSE(result);
         CHECK_EQ(calls, 0);
     }
@@ -176,10 +177,10 @@ TEST_SUITE("SBE") {
         using Messages = mp::List<turbofw::schema::service::Heartbeat, turbofw::schema::trading::CreateContext>;
 
         // a buffer shorter than a MessageHeader is not an SBE message at all
-        CHECK_FALSE(turbofw::tryDecodeSBE<Messages>(std::span<std::byte const>{buffer.data(), 4}, callback));
-        CHECK_FALSE(turbofw::tryDecodeSBE<Messages>(std::span<std::byte const>{}, callback));
+        CHECK_FALSE(turbofw::decodeSBE<Messages>(std::span<std::byte const>{buffer.data(), 4}, callback));
+        CHECK_FALSE(turbofw::decodeSBE<Messages>(std::span<std::byte const>{}, callback));
 
-        CHECK_FALSE(turbofw::tryDecodeSBE<Messages>(buffer, callback));
+        CHECK_FALSE(turbofw::decodeSBE<Messages>(buffer, callback));
         CHECK_EQ(calls, 0);
     }
 
@@ -194,7 +195,7 @@ TEST_SUITE("SBE") {
         auto const impaired = [&calls](turbofw::schema::service::Heartbeat) {
             ++calls;
         };
-        CHECK_THROWS((void)turbofw::tryDecodeSBE<mp::List<turbofw::schema::service::Heartbeat>>(truncated, impaired));
+        CHECK_THROWS((void)turbofw::decodeSBE<mp::List<turbofw::schema::service::Heartbeat>>(truncated, impaired));
         CHECK_EQ(calls, 0);
     }
 
@@ -224,8 +225,7 @@ TEST_SUITE("SBE") {
 
         // the acting header decoded once outside: every candidate compares against it without re-reading
         auto const header = Header{hbBuffer.data()};
-        CHECK(
-            turbofw::tryDecodeSBE<Messages>(std::span<std::byte const>{hbBuffer.data(), hbBuffer.size()}, header, fn));
+        CHECK(turbofw::decodeSBE<Messages>(std::span<std::byte const>{hbBuffer.data(), hbBuffer.size()}, header, fn));
         CHECK_EQ(heartbeatCalls, 1);
 
         // a header with an (schemaId, templateId) pair absent from the list: no match, no callback
@@ -234,7 +234,7 @@ TEST_SUITE("SBE") {
             ++calls;
         };
         auto const foreign = Header{foreignBuffer.data()};
-        CHECK_FALSE(turbofw::tryDecodeSBE<Messages>(
+        CHECK_FALSE(turbofw::decodeSBE<Messages>(
             std::span<std::byte const>{foreignBuffer.data(), foreignBuffer.size()}, foreign, swallow));
         CHECK_EQ(calls, 0);
     }
@@ -245,7 +245,7 @@ TEST_SUITE("SBE") {
         auto const pristine = buffer;
 
         auto calls = 0;
-        CHECK(turbofw::tryDecodeSBE<mp::List<turbofw::schema::market_data::Snapshot>>(
+        CHECK(turbofw::decodeSBE<mp::List<turbofw::schema::market_data::Snapshot>>(
             buffer, [&](turbofw::schema::market_data::Snapshot msg) {
                 ++calls;
                 CHECK_EQ(msg.get<"header">().get<"instrumentId">().value(), 42u);

@@ -34,7 +34,7 @@ private:
             turbofw::mixin::SBEReceiveMixin
         >
     >;
-    using Requests = turbofw::SBEMessages<
+    using Requests = turbofw::mp::List<
         turbofw::schema::metadata::RegisterInstrument,
         turbofw::schema::metadata::ServiceRequest
     >;
