@@ -8,7 +8,7 @@
 #include <type_traits>
 
 #include "Integral.h"
-#include "List.h"
+#include "TypeList.h"
 
 namespace turbofw::mp {
 
@@ -134,7 +134,7 @@ using Defer = typename DeferImpl<F, Ts...>::type;
 namespace detail {
 
 /// The mp11 mp_transform shape: an empty list short-circuits to itself (nothing instantiated), every other
-/// list maps element-wise through F while the container form (`mp::List`, `std::tuple`, ...) is preserved.
+/// list maps element-wise through F while the container form (`mp::TypeList`, `std::tuple`, ...) is preserved.
 template <template <typename...> typename F, typename L>
 struct TransformImpl;
 

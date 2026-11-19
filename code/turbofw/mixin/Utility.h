@@ -6,7 +6,7 @@
 #include <functional>
 #include <type_traits>
 
-#include <turbofw/mp/List.h>
+#include <turbofw/mp/TypeList.h>
 
 namespace turbofw::mixin {
 
@@ -22,7 +22,7 @@ constexpr void forEachMixin(Fn&& fn) {
     if constexpr (requires { typename Decayed::Mixins; }) {
         [&]<template <typename...> typename L, typename... Ts>(L<Ts...>) {
             (std::invoke(fn, std::type_identity<Ts>{}), ...);
-        }(mp::Rename<typename Decayed::Mixins, mp::List>{});
+        }(mp::Rename<typename Decayed::Mixins, mp::TypeList>{});
     }
 }
 

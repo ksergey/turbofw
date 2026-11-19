@@ -28,7 +28,7 @@ namespace turbofw {
 template <typename L, typename Fn>
     requires detail::UniformHeader<L>
 constexpr auto decodeSBE(std::span<std::byte const> buffer, SBEMessageHeader<L> const& header, Fn&& fn) -> bool {
-    return [&]<template <typename...> typename List, typename... Ts>(List<Ts...>)
+    return [&]<template <typename...> typename ListT, typename... Ts>(ListT<Ts...>)
         requires(SBEMessage<Ts> && ...) && (std::invocable<Fn&, Ts> && ...)
     {
         // The generated header/wrap needs a mutable pointer, but decode never writes to the buffer.

@@ -12,7 +12,7 @@
 #include <doctest/doctest.h>
 
 #include <turbofw/SBE.h>
-#include <turbofw/mp/List.h>
+#include <turbofw/mp/TypeList.h>
 
 #include <turbofw/schema/market_data/schema.h>
 #include <turbofw/schema/service/schema.h>
@@ -113,7 +113,7 @@ TEST_SUITE("SBE") {
                 CHECK_EQ(msg.get<"ts">().value(), 222);
             },
         };
-        using Messages = mp::List<turbofw::schema::market_data::Snapshot, turbofw::schema::trading::CreateContext,
+        using Messages = mp::TypeList<turbofw::schema::market_data::Snapshot, turbofw::schema::trading::CreateContext,
             turbofw::schema::service::Heartbeat>;
 
         CHECK(turbofw::decodeSBE<Messages>(snapshotBuffer, fn));
@@ -130,7 +130,7 @@ TEST_SUITE("SBE") {
 
         auto calls = 0;
         auto const result = turbofw::decodeSBE<
-            mp::List<turbofw::schema::market_data::Snapshot, turbofw::schema::trading::CreateContext>>(
+            mp::TypeList<turbofw::schema::market_data::Snapshot, turbofw::schema::trading::CreateContext>>(
             buffer, [&](auto msg) {
                 // `if constexpr` instead of a static_assert: the invocable check instantiates both branches,
                 // a static_assert would fail for the CreateContext branch even if it never runs
@@ -154,9 +154,9 @@ TEST_SUITE("SBE") {
         auto const callback = [&calls](auto&&...) {
             ++calls;
         };
-        auto const result =
-            turbofw::decodeSBE<mp::List<turbofw::schema::service::Heartbeat, turbofw::schema::market_data::Snapshot>>(
-                buffer, callback);
+        auto const result = turbofw::decodeSBE<
+            mp::TypeList<turbofw::schema::service::Heartbeat, turbofw::schema::market_data::Snapshot>>(
+            buffer, callback);
         REQUIRE_FALSE(result);
         CHECK_EQ(calls, 0);
     }
@@ -174,7 +174,7 @@ TEST_SUITE("SBE") {
         auto const callback = [&calls](auto&&...) {
             ++calls;
         };
-        using Messages = mp::List<turbofw::schema::service::Heartbeat, turbofw::schema::trading::CreateContext>;
+        using Messages = mp::TypeList<turbofw::schema::service::Heartbeat, turbofw::schema::trading::CreateContext>;
 
         // a buffer shorter than a MessageHeader is not an SBE message at all
         CHECK_FALSE(turbofw::decodeSBE<Messages>(std::span<std::byte const>{buffer.data(), 4}, callback));
@@ -195,7 +195,7 @@ TEST_SUITE("SBE") {
         auto const impaired = [&calls](turbofw::schema::service::Heartbeat) {
             ++calls;
         };
-        CHECK_THROWS((void)turbofw::decodeSBE<mp::List<turbofw::schema::service::Heartbeat>>(truncated, impaired));
+        CHECK_THROWS((void)turbofw::decodeSBE<mp::TypeList<turbofw::schema::service::Heartbeat>>(truncated, impaired));
         CHECK_EQ(calls, 0);
     }
 
@@ -205,7 +205,7 @@ TEST_SUITE("SBE") {
         encodeHeartbeat(hbBuffer);
         encodeSetLogLevel(foreignBuffer); // (schemaId, templateId) not represented in the list below
 
-        using Messages = mp::List<turbofw::schema::market_data::Snapshot, turbofw::schema::trading::CreateContext,
+        using Messages = mp::TypeList<turbofw::schema::market_data::Snapshot, turbofw::schema::trading::CreateContext,
             turbofw::schema::service::Heartbeat>;
         using Header = turbofw::SBEMessageHeader<Messages>; // one shared header type for the whole list
 
@@ -245,7 +245,7 @@ TEST_SUITE("SBE") {
         auto const pristine = buffer;
 
         auto calls = 0;
-        CHECK(turbofw::decodeSBE<mp::List<turbofw::schema::market_data::Snapshot>>(
+        CHECK(turbofw::decodeSBE<mp::TypeList<turbofw::schema::market_data::Snapshot>>(
             buffer, [&](turbofw::schema::market_data::Snapshot msg) {
                 ++calls;
                 CHECK_EQ(msg.get<"header">().get<"instrumentId">().value(), 42u);

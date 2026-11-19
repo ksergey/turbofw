@@ -63,7 +63,7 @@ struct TaggedConsumer : public testing::Consumer,
     TaggedConsumer(Queue* q, std::vector<std::pair<char, std::uint16_t>>* log)
         : testing::Consumer{q}, TagMixin<'a'>{log}, Filter{} {}
 
-    using Mixins = mp::List<TagMixin<'a'>, HooklessMixin, Filter>;
+    using Mixins = mp::TypeList<TagMixin<'a'>, HooklessMixin, Filter>;
 };
 
 /// A consumer with no other mixins: proves receive() works on a plain composition without `Mixins`
@@ -79,7 +79,7 @@ struct OrderedConsumer : public testing::Consumer,
     OrderedConsumer(Queue* q, std::vector<std::pair<char, std::uint16_t>>* log)
         : testing::Consumer{q}, TagMixin<'a'>{log}, TagMixin<'b'>{log} {}
 
-    using Mixins = mp::List<TagMixin<'a'>, TagMixin<'b'>>;
+    using Mixins = mp::TypeList<TagMixin<'a'>, TagMixin<'b'>>;
 };
 
 } // namespace
@@ -93,8 +93,8 @@ TEST_SUITE("SBEReceiveMixin") {
         auto consumer = TaggedConsumer{&queue, &log};
 
         // an empty queue: nothing received
-        auto const [nothing, noHandles, noDrops] =
-            consumer.receive<mp::List<turbofw::schema::service::Heartbeat>>([](turbofw::schema::service::Heartbeat) {
+        auto const [nothing, noHandles, noDrops] = consumer.receive<mp::TypeList<turbofw::schema::service::Heartbeat>>(
+            [](turbofw::schema::service::Heartbeat) {
                 FAIL("empty queue must not run");
             });
         CHECK_EQ(nothing, 0);
@@ -123,7 +123,7 @@ TEST_SUITE("SBEReceiveMixin") {
         producer.commit();
 
         auto calls = 0;
-        auto const [received, handled, dropped] = consumer.receive<mp::List<turbofw::schema::service::Heartbeat>>(
+        auto const [received, handled, dropped] = consumer.receive<mp::TypeList<turbofw::schema::service::Heartbeat>>(
             [&calls](turbofw::schema::service::Heartbeat msg) {
                 ++calls;
                 CHECK_EQ(msg.get<"ts">().value(), 222);
@@ -146,9 +146,10 @@ TEST_SUITE("SBEReceiveMixin") {
 
         // the queue is drained
         auto const [empty, emptyHandled, emptyDropped] =
-            consumer.receive<mp::List<turbofw::schema::service::Heartbeat>>([](turbofw::schema::service::Heartbeat) {
-                FAIL("the queue must be drained");
-            });
+            consumer.receive<mp::TypeList<turbofw::schema::service::Heartbeat>>(
+                [](turbofw::schema::service::Heartbeat) {
+                    FAIL("the queue must be drained");
+                });
         CHECK_EQ(empty, 0);
         CHECK_EQ(emptyHandled, 0);
         CHECK_EQ(emptyDropped, 0);
@@ -199,8 +200,8 @@ TEST_SUITE("SBEReceiveMixin") {
             });
         REQUIRE(beat);
 
-        auto const [received, handled, dropped] =
-            consumer.receive<mp::List<turbofw::schema::service::Heartbeat>>([](turbofw::schema::service::Heartbeat) {});
+        auto const [received, handled, dropped] = consumer.receive<mp::TypeList<turbofw::schema::service::Heartbeat>>(
+            [](turbofw::schema::service::Heartbeat) {});
         CHECK_EQ(received, 1);
         CHECK_EQ(handled, 1);
         CHECK_EQ(dropped, 0);

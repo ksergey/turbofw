@@ -20,7 +20,7 @@
 #include "mixin/SBESendMixin.h"
 #include "mixin/SendMixin.h"
 #include "testing/TestQueue.h"
-#include <turbofw/mp/List.h>
+#include <turbofw/mp/TypeList.h>
 
 namespace turbofw::testing {
 namespace {
@@ -52,7 +52,7 @@ struct AppIdStampMixin {
 struct StampingProducer : public testing::Producer, public mixin::SBESendMixin, public AppIdStampMixin {
     using testing::Producer::Producer;
 
-    using Mixins = mp::List<AppIdStampMixin>;
+    using Mixins = mp::TypeList<AppIdStampMixin>;
 };
 
 auto const kNoOpReceive = [](std::span<std::byte const>) {

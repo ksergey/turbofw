@@ -12,7 +12,7 @@
 #include "mixin/SBEAppIdStampMixin.h"
 #include "mixin/SBESendMixin.h"
 #include "testing/TestQueue.h"
-#include <turbofw/mp/List.h>
+#include <turbofw/mp/TypeList.h>
 #include <turbofw/schema/market_data/schema.h>
 #include <turbofw/schema/service/schema.h>
 
@@ -22,7 +22,7 @@ namespace {
 struct TestProducer : public testing::Producer, public mixin::SBESendMixin, public mixin::SBEAppIdStampMixin {
     using testing::Producer::Producer;
 
-    using Mixins = mp::List<mixin::SBEAppIdStampMixin>;
+    using Mixins = mp::TypeList<mixin::SBEAppIdStampMixin>;
 };
 
 struct TestConsumer : public testing::Consumer, public mixin::ReceiveMixin {

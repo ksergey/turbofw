@@ -13,7 +13,7 @@
 
 #include "CtString.h"
 #include "mp/Algorithm.h"
-#include "mp/List.h"
+#include "mp/TypeList.h"
 
 namespace turbofw {
 
@@ -97,7 +97,8 @@ using MessageHeaderOf = typename M::Header;
 /// Uniform header across the list L: every message of L carries one and the same generated MessageHeader --
 /// as all messages of one schema do. The gate of `SBEMessageHeader` and both `decodeSBE` overloads.
 template <typename L>
-concept UniformHeader = mp::IsList<L>::value && (mp::Size<mp::Unique<mp::Transform<MessageHeaderOf, L>>>::value == 1);
+concept UniformHeader =
+    mp::IsTypeList<L>::value && (mp::Size<mp::Unique<mp::Transform<MessageHeaderOf, L>>>::value == 1);
 
 } // namespace detail
 

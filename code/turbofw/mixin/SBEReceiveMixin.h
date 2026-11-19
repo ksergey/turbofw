@@ -10,7 +10,7 @@
 
 #include <turbofw/SBE.h>
 #include <turbofw/mixin/Utility.h>
-#include <turbofw/mp/List.h>
+#include <turbofw/mp/TypeList.h>
 
 namespace turbofw::mixin {
 
@@ -37,7 +37,7 @@ struct ReceiveCounters {
 /// that needs fields decodes its own message type from the buffer. The callback no-throw rule applies to hooks.
 struct SBEReceiveMixin {
     template <typename L, typename Self, typename Fn>
-        requires turboq::Consumer<std::remove_cvref_t<Self>> && mp::IsList<L>::value
+        requires turboq::Consumer<std::remove_cvref_t<Self>> && mp::IsTypeList<L>::value
     auto receive(this Self&& self, Fn&& fn) -> ReceiveCounters {
         using Header = SBEMessageHeader<L>;
 
@@ -79,7 +79,7 @@ struct SBEReceiveMixin {
     template <typename M, typename Self, typename Fn>
         requires turboq::Consumer<std::remove_cvref_t<Self>> && SBEMessage<M>
     auto receive(this Self&& self, Fn&& fn) -> ReceiveCounters {
-        return self.template receive<mp::List<M>>(std::forward<Fn>(fn));
+        return self.template receive<mp::TypeList<M>>(std::forward<Fn>(fn));
     }
 };
 

@@ -7,7 +7,7 @@
 #include <doctest/doctest.h>
 
 #include "Integral.h"
-#include "List.h"
+#include "TypeList.h"
 #include "Utility.h"
 
 namespace turbofw::mp::testing {
@@ -47,7 +47,7 @@ TEST_SUITE("Utility") {
     };
 
     TEST_CASE("Inherit inherits from every element of the list") {
-        using Composed = Inherit<List<Trace, Stamp>>;
+        using Composed = Inherit<TypeList<Trace, Stamp>>;
         CHECK(std::is_base_of_v<Trace, Composed>);
         CHECK(std::is_base_of_v<Stamp, Composed>);
 
@@ -58,7 +58,7 @@ TEST_SUITE("Utility") {
     }
 
     TEST_CASE("Inherit of an empty list inherits from nothing") {
-        using Composed = Inherit<List<>>;
+        using Composed = Inherit<TypeList<>>;
         // a struct with no bases is still constructible
         CHECK(!std::is_same_v<Composed, void>);
         CHECK((std::is_constructible_v<Composed>));

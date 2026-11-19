@@ -12,7 +12,7 @@
 #include "mixin/SBEReceiveMixin.h"
 #include "mixin/SBESendMixin.h"
 #include "testing/TestQueue.h"
-#include <turbofw/mp/List.h>
+#include <turbofw/mp/TypeList.h>
 #include <turbofw/schema/service/schema.h>
 #include <turbofw/schema/trading/schema.h>
 
@@ -27,7 +27,7 @@ struct TestProducer : public testing::Producer, public mixin::SBESendMixin {
 struct TestConsumer : public testing::Consumer, public mixin::SBEReceiveMixin, public mixin::SBEAliveMixin {
     using testing::Consumer::Consumer;
 
-    using Mixins = mp::List<mixin::SBEAliveMixin>;
+    using Mixins = mp::TypeList<mixin::SBEAliveMixin>;
 };
 
 /// Publishes a Heartbeat carrying the given flag state
@@ -48,7 +48,7 @@ auto publishStartBeat(TestProducer& producer) -> void {
 
 /// Drains the queue through the decode list (hooks run for every buffer, the callback does nothing)
 auto drain(TestConsumer& consumer) -> void {
-    consumer.receive<mp::List<turbofw::schema::service::Heartbeat>>([](turbofw::schema::service::Heartbeat) {});
+    consumer.receive<mp::TypeList<turbofw::schema::service::Heartbeat>>([](turbofw::schema::service::Heartbeat) {});
 }
 
 } // namespace

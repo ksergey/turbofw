@@ -7,14 +7,14 @@
 #include <span>
 
 #include <turbofw/SBE.h>
-#include <turbofw/mp/List.h>
+#include <turbofw/mp/TypeList.h>
 #include <turbofw/schema/market_data/schema.h>
 
 namespace {
 
 /// Both messages come from the same schema, so they share one MessageHeader: decodeSBE dispatches on its
 /// (schemaId, templateId) pair.
-using Messages = turbofw::mp::List<turbofw::schema::market_data::Snapshot, turbofw::schema::market_data::MbpUpdate>;
+using Messages = turbofw::mp::TypeList<turbofw::schema::market_data::Snapshot, turbofw::schema::market_data::MbpUpdate>;
 
 auto encodeSnapshot(std::span<std::byte> buffer, std::size_t depth) -> void {
     auto msg = turbofw::schema::market_data::Snapshot::wrapAndApplyHeader(buffer);

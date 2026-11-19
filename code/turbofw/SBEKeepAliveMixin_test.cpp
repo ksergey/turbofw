@@ -15,7 +15,7 @@
 #include "mixin/SBEKeepAliveMixin.h"
 #include "mixin/SBESendMixin.h"
 #include "testing/TestQueue.h"
-#include <turbofw/mp/List.h>
+#include <turbofw/mp/TypeList.h>
 #include <turbofw/schema/service/schema.h>
 
 namespace turbofw::testing {
@@ -24,7 +24,7 @@ namespace {
 struct TestProducer : public testing::Producer, public mixin::SBESendMixin, public mixin::SBEKeepAliveMixin {
     using testing::Producer::Producer;
 
-    using Mixins = mp::List<mixin::SBEKeepAliveMixin>;
+    using Mixins = mp::TypeList<mixin::SBEKeepAliveMixin>;
 };
 
 struct TestConsumer : public testing::Consumer, public mixin::ReceiveMixin {

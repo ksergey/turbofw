@@ -6,14 +6,14 @@
 #include <doctest/doctest.h>
 
 #include "Algorithm.h"
-#include "List.h"
+#include "TypeList.h"
 
 namespace turbofw::mp::testing {
 
 TEST_SUITE("Algorithm") {
 
     TEST_CASE("Count") {
-        using L = List<int, char, double, char, void>;
+        using L = TypeList<int, char, double, char, void>;
         CHECK_EQ(Count<L, int>::value, 1);
         CHECK_EQ(Count<L, char>::value, 2);
         CHECK_EQ(Count<L, double>::value, 1);
@@ -22,7 +22,7 @@ TEST_SUITE("Algorithm") {
     }
 
     TEST_CASE("Contains") {
-        using L = List<int, char, double, char, void>;
+        using L = TypeList<int, char, double, char, void>;
         CHECK(Contains<L, int>::value);
         CHECK(Contains<L, char>::value);
         CHECK(Contains<L, double>::value);
@@ -31,8 +31,8 @@ TEST_SUITE("Algorithm") {
         CHECK(!Contains<L, char*>::value);
     }
 
-    TEST_CASE("At; List") {
-        using Types = List<int, double, char, float>;
+    TEST_CASE("At; TypeList") {
+        using Types = TypeList<int, double, char, float>;
         CHECK(std::is_same_v<At<Types, SizeT<0>>::type, int>);
         CHECK(std::is_same_v<At<Types, SizeT<1>>::type, double>);
         CHECK(std::is_same_v<At<Types, SizeT<2>>::type, char>);
@@ -46,7 +46,7 @@ TEST_SUITE("Algorithm") {
     }
 
     TEST_CASE("At_c: sugar over At") {
-        using Types = List<int, double, char, float>;
+        using Types = TypeList<int, double, char, float>;
         CHECK(std::is_same_v<At_c<Types, 0>, int>);
         CHECK(std::is_same_v<At_c<Types, 1>, double>);
         CHECK(std::is_same_v<At_c<Types, 2>, char>);
@@ -55,8 +55,8 @@ TEST_SUITE("Algorithm") {
         // "tuple_element index out of range", it is not a SFINAE-friendly failure
     }
 
-    TEST_CASE("Find; List") {
-        using Types = List<int, double, char, float>;
+    TEST_CASE("Find; TypeList") {
+        using Types = TypeList<int, double, char, float>;
         CHECK_EQ(Find<Types, int>::value, 0);
         CHECK_EQ(Find<Types, double>::value, 1);
         CHECK_EQ(Find<Types, char>::value, 2);
@@ -86,7 +86,7 @@ TEST_SUITE("Algorithm") {
     using PredB = std::bool_constant<T::value == 64>;
 
     TEST_CASE("FindIf") {
-        using Objects = List<Object<5>, Object<3>, Object<7>, Object<32>>;
+        using Objects = TypeList<Object<5>, Object<3>, Object<7>, Object<32>>;
         CHECK_EQ(FindIf<Objects, PredA>::value, 2);
         CHECK_EQ(FindIf<Objects, PredB>::value, 4);
     }
@@ -98,7 +98,7 @@ TEST_SUITE("Algorithm") {
     };
 
     TEST_CASE("FindIf_q") {
-        using Objects = List<Object<5>, Object<3>, Object<7>, Object<32>>;
+        using Objects = TypeList<Object<5>, Object<3>, Object<7>, Object<32>>;
         CHECK_EQ(FindIf_q<Objects, Pred<5>>::value, 0);
         CHECK_EQ(FindIf_q<Objects, Pred<3>>::value, 1);
         CHECK_EQ(FindIf_q<Objects, Pred<7>>::value, 2);
@@ -108,12 +108,12 @@ TEST_SUITE("Algorithm") {
     }
 
     TEST_CASE("Unique") {
-        using L = List<int, char, int, double, void, char>;
-        CHECK(std::is_same_v<Unique<L>, List<int, double, void, char>>);
+        using L = TypeList<int, char, int, double, void, char>;
+        CHECK(std::is_same_v<Unique<L>, TypeList<int, double, void, char>>);
     }
 
     TEST_CASE("Unique; empty list") {
-        CHECK(std::is_same_v<Unique<List<>>, List<>>);
+        CHECK(std::is_same_v<Unique<TypeList<>>, TypeList<>>);
     }
 
     // a never-matching predicate
@@ -121,7 +121,7 @@ TEST_SUITE("Algorithm") {
     using PredNothing = std::bool_constant<false>;
 
     TEST_CASE("CountIf") {
-        using Objects = List<Object<5>, Object<3>, Object<7>, Object<32>>;
+        using Objects = TypeList<Object<5>, Object<3>, Object<7>, Object<32>>;
         CHECK_EQ(CountIf<Objects, PredA>::value, 1);
         CHECK_EQ(CountIf<Objects, PredB>::value, 0); // nothing matches PredB (== 64), see FindIf
         CHECK_EQ(CountIf<Objects, PredNothing>::value, 0);
@@ -138,13 +138,13 @@ TEST_SUITE("Algorithm") {
 
     TEST_CASE("CountIf normalizes the predicate result to bool") {
         // the predicate is instantiated for every element, so it must be valid on all of them
-        using L = List<void, double>;
+        using L = TypeList<void, double>;
         CHECK_EQ(CountIf<L, PredNothing>::value, 0);      // int 0 is false
         CHECK_EQ(CountIf<L, PredNonBoolTrait>::value, 2); // int 3 counts: ToBool normalizes
     }
 
     TEST_CASE("CountIf_q") {
-        using Objects = List<Object<5>, Object<3>, Object<7>, Object<32>>;
+        using Objects = TypeList<Object<5>, Object<3>, Object<7>, Object<32>>;
         CHECK_EQ(CountIf_q<Objects, Pred<5>>::value, 1);
         CHECK_EQ(CountIf_q<Objects, Pred<32>>::value, 1);
         CHECK_EQ(CountIf_q<Objects, Pred<44>>::value, 0);
@@ -165,13 +165,13 @@ TEST_SUITE("Algorithm") {
         using fn = ObjectQ<sizeof(T)>;
     };
 
-    TEST_CASE("Transform; List") {
-        using L = List<int, char, double>;
-        CHECK((std::is_same_v<Transform<MapPointer, L>, List<int*, char*, double*>>));
+    TEST_CASE("Transform; TypeList") {
+        using L = TypeList<int, char, double>;
+        CHECK((std::is_same_v<Transform<MapPointer, L>, TypeList<int*, char*, double*>>));
     }
 
     TEST_CASE("Transform; empty list short-circuits, form preserved") {
-        CHECK(std::is_same_v<Transform<MapPointer, List<>>, List<>>);
+        CHECK(std::is_same_v<Transform<MapPointer, TypeList<>>, TypeList<>>);
         CHECK(std::is_same_v<Transform<MapPointer, std::tuple<>>, std::tuple<>>);
     }
 
@@ -181,18 +181,18 @@ TEST_SUITE("Algorithm") {
     }
 
     TEST_CASE("Transform_q") {
-        using L = List<char, std::int64_t>;
-        CHECK((std::is_same_v<Transform_q<QuotedMap, L>, List<ObjectQ<1>, ObjectQ<8>>>));
+        using L = TypeList<char, std::int64_t>;
+        CHECK((std::is_same_v<Transform_q<QuotedMap, L>, TypeList<ObjectQ<1>, ObjectQ<8>>>));
     }
 
     TEST_CASE("Defer; public mp_defer-style application") {
         CHECK(std::is_same_v<Defer<MapPointer, std::int64_t>, std::int64_t*>);
         // a mapping that takes the elements as a pack
-        CHECK(std::is_same_v<Defer<List, void, double>, List<void, double>>);
+        CHECK(std::is_same_v<Defer<TypeList, void, double>, TypeList<void, double>>);
     }
 
     TEST_CASE("Count and Find are FindIf/CountIf over the sameness predicate") {
-        using Types = List<int, double, char, float>;
+        using Types = TypeList<int, double, char, float>;
         // turbofw::mp::detail::SameAs is the shared engine: value-shaped Count/Find must be exactly the
         // engine re-wrapped, so either type comparison holds
         CHECK((std::is_same_v<CountIf<Types, detail::SameAs<char>::template fn>, Count<Types, char>>));
