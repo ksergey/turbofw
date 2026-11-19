@@ -3,11 +3,38 @@
 
 #pragma once
 
+#include <cmath>
+#include <concepts>
+#include <string_view>
+#include <type_traits>
+
 #include <turbofw/SBESchemaUtils.h>
 
 namespace turbofw::detail::sbe {
 
-template <typename W>
+/// Default visitor options: a compile-time policy, the `Opts` parameter of `MessageVisitor`. Derive from it
+/// and shadow a member to change one knob; future ones (field renames, readable timestamps, ...) land here
+/// as new members/hooks, without changing the visitor and `toJsonString` signatures.
+struct MessageVisitorDefaultOpts {
+    /// How decimal-like composites (a `mantissa` + an `exponent`, e.g. Price9) are written
+    enum class Decimal {
+        Double, ///< a JSON number: mantissa scaled by 10^exponent
+        Object, ///< the nested `{"mantissa": ..., "exponent": ...}` object
+    };
+
+    static constexpr Decimal decimal = Decimal::Double;
+};
+
+namespace impl {
+
+template <typename>
+inline constexpr bool kAlwaysFalse = false;
+
+} // namespace impl
+
+/// Walks a decoded SBE message and feeds it to the writer W: `objectBegin/key/valueStr/valueNumber/...`.
+/// W is any type with that interface -- `JsonWriter` is the JSON one.
+template <typename W, typename Opts = MessageVisitorDefaultOpts>
 struct MessageVisitor {
     W& writer;
 
@@ -34,11 +61,7 @@ struct MessageVisitor {
         writer.arrayBegin();
         while (group.hasNext()) {
             group.next();
-            writer.objectBegin();
-            sbeForEachField(group, [&]<typename S>(S sub) {
-                this->operator()(sub);
-            });
-            writer.objectEnd();
+            writeFields(group);
         }
         writer.arrayEnd();
     }
@@ -46,6 +69,8 @@ struct MessageVisitor {
     template <typename D>
         requires SBEFieldIsData<D>
     void operator()(D data) {
+        static_assert(std::convertible_to<decltype(data.value()), std::string_view>,
+            "MessageVisitor: only text SBE data fields (varStringEncoding) can be serialized");
         writer.key(data.sbeRefName());
         writer.valueStr(data.value());
     }
@@ -57,18 +82,17 @@ struct MessageVisitor {
         if (!composite.present()) {
             return writer.valueNull();
         }
-        if constexpr (SBEFieldIsCompositeDecimal<C> && false) { // TODO
-            auto const mantissaValue = static_cast<double>(composite.template get<"mantissa">().value());
-            auto const exponentValue = static_cast<double>(composite.template get<"exponent">().value());
-            writer.valueNumber(exponentValue <= 0.0 ? (mantissaValue / std::pow(10.0, -exponentValue))
-                                                    : (mantissaValue * std::pow(10.0, exponentValue)));
-
+        if constexpr (SBEFieldIsCompositeDecimal<C>) {
+            if constexpr (Opts::decimal == MessageVisitorDefaultOpts::Decimal::Double) {
+                auto const mantissaValue = static_cast<double>(composite.template get<"mantissa">().value());
+                auto const exponentValue = static_cast<int>(composite.template get<"exponent">().value());
+                writer.valueNumber(exponentValue <= 0 ? mantissaValue / std::pow(10.0, -exponentValue)
+                                                      : mantissaValue * std::pow(10.0, exponentValue));
+            } else {
+                writeFields(composite);
+            }
         } else {
-            writer.objectBegin();
-            sbeForEachField(composite, [&]<typename S>(S sub) {
-                this->operator()(sub);
-            });
-            writer.objectEnd();
+            writeFields(composite);
         }
     }
 
@@ -101,9 +125,19 @@ struct MessageVisitor {
         } else if constexpr (SBETypeIsNumber<typename F::ValueType>) {
             writer.valueNumber(field.value());
         } else {
-            writer.valueStr("<SHIT>");
-            // writer.valueShit();
+            static_assert(impl::kAlwaysFalse<F>, "MessageVisitor: unsupported SBE field value type");
         }
+    }
+
+private:
+    /// The named fields of a message, a group entry or a composite, as a JSON object
+    template <typename T>
+    void writeFields(T entry) {
+        writer.objectBegin();
+        sbeForEachField(entry, [&]<typename F>(F field) {
+            this->operator()(field);
+        });
+        writer.objectEnd();
     }
 };
 

@@ -1,14 +1,22 @@
 // Copyright (c) Sergey Kovalevich <inndie@gmail.com>
 // SPDX-License-Identifier: MIT
 
+#include <array>
+#include <cstddef>
 #include <print>
+#include <span>
 
 #include <turbofw/SBE.h>
+#include <turbofw/mp/List.h>
+#include <turbofw/schema/market_data/schema.h>
 
-#include <turbofw/schema/service/Heartbeat.h>
+namespace {
 
-[[nodiscard]] auto encodeExampleSnapshotMessage(
-    std::span<std::byte> buffer, std::size_t depth) -> turbofw::schema::market_data::Snapshot {
+/// Both messages come from the same schema, so they share one MessageHeader: decodeSBE dispatches on its
+/// (schemaId, templateId) pair.
+using Messages = turbofw::mp::List<turbofw::schema::market_data::Snapshot, turbofw::schema::market_data::MbpUpdate>;
+
+auto encodeSnapshot(std::span<std::byte> buffer, std::size_t depth) -> void {
     auto msg = turbofw::schema::market_data::Snapshot::wrapAndApplyHeader(buffer);
 
     auto header = msg.get<"header">();
@@ -42,13 +50,10 @@
     }
 
     auto stats = msg.get<"stats">();
-    stats.reset(0);
-
-    return msg.rewind();
+    stats.reset(0); // an empty group
 }
 
-[[nodiscard]] auto encodeExampleMbpUpdateMessage(
-    std::span<std::byte> buffer) -> turbofw::schema::market_data::MbpUpdate {
+auto encodeMbpUpdate(std::span<std::byte> buffer) -> void {
     auto msg = turbofw::schema::market_data::MbpUpdate::wrapAndApplyHeader(buffer);
 
     auto header = msg.get<"header">();
@@ -60,25 +65,25 @@
     msg.get<"side">().value(turbofw::schema::market_data::Side::Bid);
     msg.get<"action">().value(turbofw::schema::market_data::UpdateAction::New);
     msg.get<"level">().value(1);
-    msg.get<"price">().get<"mantissa">().value(1500000000);
+    msg.get<"price">().get<"mantissa">().value(1500000000); // 1.5 at exponent -9
     msg.get<"qty">().value(30);
     msg.get<"orders">().value(1);
-
-    return msg.rewind();
 }
 
-int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
+} // namespace
+
+int main() {
     std::array<std::byte, 1024> buffer;
 
-    {
-        auto msg = encodeExampleSnapshotMessage(buffer, 4);
-        std::print("snapshot:\n{}\n", turbofw::toJsonString(msg));
-    }
+    auto const printJson = [](auto msg) {
+        std::print("{}\n", turbofw::toJsonString(msg));
+    };
 
-    {
-        auto msg = encodeExampleMbpUpdateMessage(buffer);
-        std::print("mbp-update:\n{}\n", turbofw::toJsonString(msg));
-    }
+    std::print("snapshot:\n");
+    encodeSnapshot(buffer, 4);
+    turbofw::decodeSBE<Messages>(buffer, printJson);
 
-    return EXIT_SUCCESS;
+    std::print("mbp-update:\n");
+    encodeMbpUpdate(buffer);
+    turbofw::decodeSBE<Messages>(buffer, printJson);
 }

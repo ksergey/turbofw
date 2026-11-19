@@ -47,10 +47,10 @@ concept SBEFieldIsGroup = SBEField<F> && requires {
     { std::remove_cvref_t<F>::sbeGroupName() } -> std::convertible_to<std::string_view>;
 };
 
-/// Checks F is a generated field and this field is variable length data
+/// Checks F is a generated field and this field is variable length data. Unlike groups and composites, data
+/// classes carry no `Fields` list (they hold a single value), so the marker is `sbeDataName()` alone.
 template <typename F>
 concept SBEFieldIsData = SBEField<F> && requires {
-    typename std::remove_cvref_t<F>::Fields;
     { std::remove_cvref_t<F>::sbeDataName() } -> std::convertible_to<std::string_view>;
 };
 

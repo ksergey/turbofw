@@ -67,19 +67,24 @@ constexpr auto decodeSBE(std::span<std::byte const> buffer, Fn&& fn) -> bool {
     return decodeSBE<L, Fn>(buffer, header, std::forward<Fn>(fn));
 }
 
-template <typename OutputIt, typename M>
+/// Serializes a decoded SBE message as JSON into `out`. Opts is the visitor policy (see
+/// `detail::sbe::MessageVisitorDefaultOpts`); it changes how the message is written, not what is in it.
+template <typename Opts = detail::sbe::MessageVisitorDefaultOpts, typename OutputIt, typename M>
     requires SBEMessage<M>
 constexpr auto toJsonString(OutputIt out, M msg) -> OutputIt {
     auto writer = detail::sbe::JsonWriter{out};
-    detail::sbe::MessageVisitor{writer}(msg);
+    detail::sbe::MessageVisitor<decltype(writer), Opts>{writer}(msg);
     return out;
 }
 
-template <typename M>
+/// The convenience form: serializes into a `std::string`. With the default options decimals are JSON numbers;
+/// `toJsonString<MyOpts>(msg)` with a policy derived from `detail::sbe::MessageVisitorDefaultOpts` changes that
+/// (e.g. decimal composites as the `{"mantissa": ..., "exponent": ...}` object).
+template <typename Opts = detail::sbe::MessageVisitorDefaultOpts, typename M>
     requires SBEMessage<M>
 [[nodiscard]] constexpr auto toJsonString(M msg) -> std::string {
     std::string buffer;
-    toJsonString(std::back_inserter(buffer), msg);
+    toJsonString<Opts>(std::back_inserter(buffer), msg);
     return buffer;
 }
 
