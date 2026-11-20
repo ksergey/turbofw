@@ -226,7 +226,7 @@ TEST_SUITE("SBE JSON") {
 
     TEST_CASE("logger wrapper copies the body and keeps the acting block length/version") {
         using Message = turbofw::schema::service::Heartbeat;
-        using Wrapper = turbofw::logging::SBEWrapper<Message>;
+        using Wrapper = turbofw::detail::sbe::Wrapper<Message>;
         using WrapperCodec = turboq::logger::Codec<Wrapper>;
 
         auto buffer = std::array<std::byte, kBufferSize>{};
