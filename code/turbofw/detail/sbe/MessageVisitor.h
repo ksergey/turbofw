@@ -18,9 +18,10 @@ enum class DecimalFormat {
     AsObject, ///< the nested `{"mantissa": ..., "exponent": ...}` object
 };
 
-/// Default visitor options: a compile-time policy, the `Opts` parameter of `MessageVisitor`. Derive from it
-/// and shadow a member to change one knob; future ones (field renames, readable timestamps, ...) land here
-/// as new members/hooks, without changing the visitor and `toJsonString` signatures.
+/// Default visitor options: a compile-time policy, the `Opts` parameter of `MessageVisitor`. `Opts` need not
+/// derive from it -- it only has to provide the same members (currently `decimalFormat`). Future knobs (field
+/// renames, readable timestamps, ...) land here as new members/hooks, without changing the visitor and
+/// `toJsonString` signatures; a custom `Opts` then has to provide them too.
 struct MessageVisitorDefaultOpts {
     static constexpr auto decimalFormat = DecimalFormat::AsDouble;
 };

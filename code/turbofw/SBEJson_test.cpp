@@ -1,6 +1,7 @@
 // Copyright (c) Sergey Kovalevich <inndie@gmail.com>
 // SPDX-License-Identifier: MIT
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -9,6 +10,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 
 #include <doctest/doctest.h>
 #include <nlohmann/json.hpp>
@@ -220,6 +222,39 @@ TEST_SUITE("SBE JSON") {
         writer.objectEnd();
 
         CHECK_EQ(out, R"({"a":1,"b":[1,2],"c":[],"d":{"x":"q\"t"},"e":[[1],[]]})");
+    }
+
+    TEST_CASE("logger wrapper copies the body and keeps the acting block length/version") {
+        using Message = turbofw::schema::service::Heartbeat;
+        using Wrapper = turbofw::logging::SBEWrapper<Message>;
+        using WrapperCodec = turboq::logger::Codec<Wrapper>;
+
+        auto buffer = std::array<std::byte, kBufferSize>{};
+        auto const msg = encodeHeartbeat(buffer);
+
+        // Non-default acting version: a message replayed with the schema defaults would decode differently
+        auto const original = Wrapper{msg.buffer().subspan(msg.offset()), msg.actingBlockLength(),
+            static_cast<std::uint16_t>(msg.actingVersion() + 1)};
+
+        auto storage = std::array<std::byte, kBufferSize>{};
+        auto dest = storage.data();
+        WrapperCodec::encode(dest, original);
+        CHECK_EQ(dest, storage.data() + WrapperCodec::encodedSize(original));
+
+        auto src = std::as_const(storage).data();
+        auto const restored = WrapperCodec::decode(src);
+        CHECK_EQ(restored.content.size(), original.content.size());
+        CHECK(std::ranges::equal(restored.content, original.content));
+        CHECK_EQ(restored.actingBlockLength, original.actingBlockLength);
+        CHECK_EQ(restored.actingVersion, original.actingVersion);
+
+        auto const replay = restored.makeMsg();
+        CHECK_EQ(replay.actingBlockLength(), original.actingBlockLength);
+        CHECK_EQ(replay.actingVersion(), original.actingVersion);
+
+        auto const parsed = nlohmann::json::parse(turbofw::toJsonString(replay));
+        CHECK_EQ(parsed["ts"], 222);
+        CHECK_EQ(parsed["serviceId"], 1);
     }
 }
 
