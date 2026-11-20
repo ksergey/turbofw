@@ -26,8 +26,8 @@ namespace {
 constexpr auto kBufferSize = 512;
 
 /// Decimal composites as the nested {"mantissa": ..., "exponent": ...} object
-struct DecimalObjectOpts : detail::sbe::MessageVisitorDefaultOpts {
-    static constexpr Decimal decimal = Decimal::Object;
+struct DecimalObjectOpts {
+    static constexpr auto decimalFormat = detail::sbe::DecimalFormat::AsObject;
 };
 
 /// Every encoder returns the message rewound to the start of its body: a decoded view over what was just written

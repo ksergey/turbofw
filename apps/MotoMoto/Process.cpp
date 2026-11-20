@@ -47,6 +47,7 @@ void Process::run() {
         tq_info("running...");
 
         consumer_.receive<Requests>([&]<typename M>(M req) {
+            tq_debug("request {}", req);
             this->processRequest(req);
         });
 

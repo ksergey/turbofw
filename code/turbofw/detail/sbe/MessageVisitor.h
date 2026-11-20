@@ -12,17 +12,17 @@
 
 namespace turbofw::detail::sbe {
 
+/// How decimal-like composites (a `mantissa` + an `exponent`, e.g. Price9) are written
+enum class DecimalFormat {
+    AsDouble, ///< a JSON number: mantissa scaled by 10^exponent
+    AsObject, ///< the nested `{"mantissa": ..., "exponent": ...}` object
+};
+
 /// Default visitor options: a compile-time policy, the `Opts` parameter of `MessageVisitor`. Derive from it
 /// and shadow a member to change one knob; future ones (field renames, readable timestamps, ...) land here
 /// as new members/hooks, without changing the visitor and `toJsonString` signatures.
 struct MessageVisitorDefaultOpts {
-    /// How decimal-like composites (a `mantissa` + an `exponent`, e.g. Price9) are written
-    enum class Decimal {
-        Double, ///< a JSON number: mantissa scaled by 10^exponent
-        Object, ///< the nested `{"mantissa": ..., "exponent": ...}` object
-    };
-
-    static constexpr Decimal decimal = Decimal::Double;
+    static constexpr auto decimalFormat = DecimalFormat::AsDouble;
 };
 
 namespace impl {
@@ -82,15 +82,11 @@ struct MessageVisitor {
         if (!composite.present()) {
             return writer.valueNull();
         }
-        if constexpr (SBEFieldIsCompositeDecimal<C>) {
-            if constexpr (Opts::decimal == MessageVisitorDefaultOpts::Decimal::Double) {
-                auto const mantissaValue = static_cast<double>(composite.template get<"mantissa">().value());
-                auto const exponentValue = static_cast<int>(composite.template get<"exponent">().value());
-                writer.valueNumber(exponentValue <= 0 ? mantissaValue / std::pow(10.0, -exponentValue)
-                                                      : mantissaValue * std::pow(10.0, exponentValue));
-            } else {
-                writeFields(composite);
-            }
+        if constexpr (SBEFieldIsCompositeDecimal<C> && Opts::decimalFormat == DecimalFormat::AsDouble) {
+            auto const mantissaValue = static_cast<double>(composite.template get<"mantissa">().value());
+            auto const exponentValue = static_cast<int>(composite.template get<"exponent">().value());
+            writer.valueNumber(exponentValue <= 0 ? mantissaValue / std::pow(10.0, -exponentValue)
+                                                  : mantissaValue * std::pow(10.0, exponentValue));
         } else {
             writeFields(composite);
         }
