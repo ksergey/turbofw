@@ -199,7 +199,9 @@ int main(int argc, char* argv[]) {
         auto const serviceName = parseResult["service"].as<std::string>();
 
         auto env = turbofw::SystemDefinition::loadFromFile(parseResult["system"].as<std::filesystem::path>())
-                       .and_then([&](auto const& sys) { return sys.environmentFor(serviceName); });
+                       .and_then([&](auto const& sys) {
+                           return sys.environmentFor(serviceName);
+                       });
         if (!env) {
             throw std::runtime_error{env.error()};
         }
@@ -246,8 +248,8 @@ int main(int argc, char* argv[]) {
         auto const logLevel = parseLogLevel(parseResult["log-level"].as<std::string>());
         auto const firstRequestId = parseResult["request-id"].as<std::uint64_t>();
         auto const listenSeconds = parseResult["listen"].as<std::uint32_t>();
-        auto const appId = parseResult.count("app-id") ? std::optional{parseResult["app-id"].as<std::uint32_t>()}
-                                                       : std::nullopt;
+        auto const appId =
+            parseResult.count("app-id") ? std::optional{parseResult["app-id"].as<std::uint32_t>()} : std::nullopt;
 
         app::Client client{*env, appId, firstRequestId};
         std::println("client appId={} service={} send={}", value_of(client.appId()), serviceName,
@@ -278,9 +280,9 @@ int main(int argc, char* argv[]) {
         client.listen(std::chrono::seconds{listenSeconds});
 
         auto const summary = client.summary();
-        std::println(
-            "summary: sent={} received={} handled={} dropped={} foreign={} completed={} timeout={}", summary.sent,
-            summary.received, summary.handled, summary.dropped, summary.foreign, summary.completed, summary.timeout);
+        std::println("summary: sent={} received={} handled={} dropped={} foreign={} completed={} timeout={}",
+            summary.sent, summary.received, summary.handled, summary.dropped, summary.foreign, summary.completed,
+            summary.timeout);
 
         if (summary.sent > 0 && summary.completed == 0) {
             std::println(

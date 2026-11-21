@@ -76,15 +76,14 @@ auto Client::makeProducer(Environment const& env, std::optional<std::uint32_t> a
 }
 
 Client::Client(Environment const& env, std::optional<std::uint32_t> appId, std::uint64_t firstRequestId)
-    : producer_{makeProducer(env, appId)}
-    , consumer_{[&env] {
-        auto consumer = env.createConsumer<Consumer>("data");
-        if (!consumer) {
-            throw std::runtime_error{consumer.error()};
-        }
-        return std::move(*consumer);
-    }()}
-    , nextRequestId_{firstRequestId} {}
+    : producer_{makeProducer(env, appId)}, consumer_{[&env] {
+          auto consumer = env.createConsumer<Consumer>("data");
+          if (!consumer) {
+              throw std::runtime_error{consumer.error()};
+          }
+          return std::move(*consumer);
+      }()},
+      nextRequestId_{firstRequestId} {}
 
 template <typename M, typename Fn>
 auto Client::sendVars(typename M::SizeHint hint, Fn&& fn) -> std::expected<void, std::error_code> {
@@ -103,8 +102,8 @@ auto Client::sendVars(typename M::SizeHint hint, Fn&& fn) -> std::expected<void,
 
     awaiting_.push_back(requestId);
     ++summary_.sent;
-    std::println("sent {} appId={} requestId={} bytes={}", M::sbeMessageName(), value_of(producer_.appId()),
-        requestId, bufferSize);
+    std::println("sent {} appId={} requestId={} bytes={}", M::sbeMessageName(), value_of(producer_.appId()), requestId,
+        bufferSize);
     return {};
 }
 
@@ -125,8 +124,8 @@ auto Client::sendFixed(Fn&& fn) -> std::expected<void, std::error_code> {
 
     awaiting_.push_back(requestId);
     ++summary_.sent;
-    std::println("sent {} appId={} requestId={} bytes={}", M::sbeMessageName(), value_of(producer_.appId()),
-        requestId, bufferSize);
+    std::println("sent {} appId={} requestId={} bytes={}", M::sbeMessageName(), value_of(producer_.appId()), requestId,
+        bufferSize);
     return {};
 }
 
@@ -142,15 +141,15 @@ auto Client::sendRegisterService(RegisterServiceParams const& params) -> std::ex
 }
 
 auto Client::sendRegisterInstrument(RegisterInstrumentParams const& params) -> std::expected<void, std::error_code> {
-    return sendVars<metadata::RegisterInstrument>({params.exchangeSymbol.size(), params.symbol.size()},
-        [&params](auto msg) {
+    return sendVars<metadata::RegisterInstrument>(
+        {params.exchangeSymbol.size(), params.symbol.size()}, [&params](auto msg) {
             msg.template get<"reportedTs">().value(static_cast<std::int64_t>(turbofw::realtimeNanos()));
             auto attrs = msg.template get<"attrs">();
             attrs.template get<"venueId">().value(params.venueId);
             attrs.template get<"serviceId">().value(params.serviceId);
             attrs.template get<"instrumentType">().value(params.instrumentType);
             attrs.template get<"state">().value(params.state);
-            attrs.template get<"tickSize">().get<"mantissa">().value(params.tickSize);
+            attrs.template get<"tickSize">().template get<"mantissa">().value(params.tickSize);
             attrs.template get<"lotSize">().value(params.lotSize);
             attrs.template get<"multiplier">().value(params.multiplier);
             attrs.template get<"expiry">().reset();
@@ -215,7 +214,9 @@ void Client::listen(std::chrono::milliseconds timeout) {
     auto const hasRequests = !awaiting_.empty();
 
     while (true) {
-        auto const counters = consumer_.receive<Responses>([this]<typename M>(M msg) { onMessage(msg); });
+        auto const counters = consumer_.receive<Responses>([this]<typename M>(M msg) {
+            onMessage(msg);
+        });
 
         summary_.received += counters.received;
         summary_.handled += counters.handled;
